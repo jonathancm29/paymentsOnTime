@@ -31,6 +31,7 @@ export default function App() {
   const [expenses, setExpenses] = useState([]);
   const [payments, setPayments] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
+  const [modalHormigaOpen, setModalHormigaOpen] = useState(false);
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
 
@@ -96,7 +97,7 @@ export default function App() {
 
       for (const expense of expensesData) {
         const hasPaymentThisMonth = currentMonthPayments.some(p => p.expense_id === expense.id);
-        if (!hasPaymentThisMonth) {
+        if (!hasPaymentThisMonth && !expense.is_spontaneous) {
           newPaymentsToInsert.push({
             expense_id: expense.id,
             month_year: currentMonth,
@@ -309,8 +310,40 @@ export default function App() {
             <div className="loader"></div>
           ) : (
             <>
-              <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                <div className="search-input-wrapper">
+              {/* CATEGORIES SUMMARY SECTION */}
+              <div className="categories-summary-container">
+                <h3 style={{ fontSize: '1rem', marginBottom: '0.75rem', color: 'var(--color-text-main)' }}>Resumen por Categoría</h3>
+                <div className="categories-scroll">
+                  {Object.values(CATEGORIES).map(cat => {
+                    const catPayments = activePayments.filter(p => {
+                      const exp = expenses.find(e => e.id === p.expense_id);
+                      return exp?.category === cat.id;
+                    });
+                    if (catPayments.length === 0) return null;
+
+                    const catTotal = catPayments.reduce((acc, p) => acc + Number(expenses.find(e => e.id === p.expense_id)?.amount || 0), 0);
+                    const catPaid = catPayments.filter(p => p.completed).reduce((acc, p) => acc + Number(p.amount_paid || expenses.find(e => e.id === p.expense_id)?.amount || 0), 0);
+                    const CatIcon = cat.icon;
+                    const pct = catTotal > 0 ? (catPaid / catTotal) * 100 : 0;
+
+                    return (
+                      <div key={cat.id} className="glass-panel category-pill">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                          <CatIcon size={16} /> <span style={{ fontSize: '0.85rem', fontWeight: 'bold' }}>{cat.label}</span>
+                        </div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>${catTotal.toLocaleString('es-CO')}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Pagado: ${catPaid.toLocaleString('es-CO')}</div>
+                        <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', marginTop: '0.5rem', overflow: 'hidden' }}>
+                          <div style={{ width: `${pct}%`, height: '100%', background: pct === 100 ? 'var(--color-success)' : 'var(--color-primary)', borderRadius: '2px' }}></div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginTop: '1.5rem', flexWrap: 'wrap' }}>
+                <div className="search-input-wrapper" style={{ flex: 1, minWidth: '200px' }}>
                   <Search size={18} />
                   <input
                     type="text"
@@ -320,7 +353,10 @@ export default function App() {
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
                 </div>
-                <button className="glass-button primary" onClick={() => { setEditingExpense(null); setModalOpen(true); }}>
+                <button className="glass-button" onClick={() => { setModalHormigaOpen(true); }} style={{ flexShrink: 0 }}>
+                  <Coffee size={18} /> Gasto Hormiga
+                </button>
+                <button className="glass-button primary" onClick={() => { setEditingExpense(null); setModalOpen(true); }} style={{ flexShrink: 0 }}>
                   <Plus size={18} /> Nuevo Gasto
                 </button>
               </div>
@@ -350,7 +386,9 @@ export default function App() {
                     const expense = expenses.find(e => e.id === payment.expense_id);
                     if (!expense) return null;
 
-                    const isOverdue = payment.month_year < currentMonth && !payment.completed;
+                    const currentDay = new Date().getDate();
+                    const isOverdue = !payment.completed && (payment.month_year < currentMonth || (payment.month_year === currentMonth && expense.due_day < currentDay));
+                    const isWarning = isOverdue;
                     const IconComponent = CATEGORIES[expense.category]?.icon || Droplet;
 
                     // History for this expense explicitly
@@ -379,7 +417,8 @@ export default function App() {
                               <div className="payment-meta">
                                 <span>
                                   Día {expense.due_day}
-                                  {isOverdue && <span className="overdue-badge">Vencido</span>}
+                                  {isWarning && <span className="overdue-badge"><AlertCircle size={10} style={{ display: 'inline', marginRight: '2px' }} /> Vencido</span>}
+                                  {expense.is_spontaneous && <span className="badge" style={{ background: 'rgba(255,255,255,0.1)', color: 'white' }}>Hormiga</span>}
                                 </span>
                                 <span>• {CATEGORIES[expense.category]?.label || 'General'}</span>
                               </div>
@@ -430,6 +469,27 @@ export default function App() {
               initialData={editingExpense}
               onClose={handleCloseModal}
               onSuccess={fetchData}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* GASTO HORMIGA MODAL */}
+      <div className={`modal-overlay ${modalHormigaOpen ? 'open' : ''}`}>
+        <div className="glass-panel modal-content">
+          <div className="modal-header">
+            <h3>Registrar Gasto Hormiga</h3>
+            <button className="close-button" onClick={() => setModalHormigaOpen(false)}>
+              <X size={20} />
+            </button>
+          </div>
+
+          {modalHormigaOpen && (
+            <ExpenseHormigaForm
+              onClose={() => setModalHormigaOpen(false)}
+              onSuccess={fetchData}
+              session={session}
+              currentMonth={currentMonth}
             />
           )}
         </div>
@@ -873,5 +933,88 @@ function ExpenseDetailScreen({ expense, allPayments, onBack, onTogglePayment, cu
         )}
       </div>
     </div>
+  );
+}
+// --- HORIMGA EXPENSE FORM ---
+function ExpenseHormigaForm({ onClose, onSuccess, session, currentMonth }) {
+  const [loading, setLoading] = useState(false);
+  const [name, setName] = useState('');
+  const [amount, setAmount] = useState('');
+  const [category, setCategory] = useState('compras');
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      // 1. Insert an impromptu expense
+      const { data: newExpense, error: expError } = await supabase
+        .from('expenses')
+        .insert({
+          user_id: session.user.id,
+          name: name,
+          amount: parseFloat(amount),
+          due_day: new Date().getDate(),
+          category: category,
+          is_spontaneous: true
+        })
+        .select('*')
+        .single();
+
+      if (expError) throw expError;
+
+      // 2. Immediately insert its single completed payment for the current month
+      const { error: payError } = await supabase
+        .from('payments')
+        .insert({
+          expense_id: newExpense.id,
+          month_year: currentMonth,
+          completed: true,
+          completed_at: new Date().toISOString(),
+          amount_paid: parseFloat(amount)
+        });
+
+      if (payError) throw payError;
+
+      onSuccess();
+      onClose();
+    } catch (error) {
+      console.error('Error insertando Gasto Hormiga:', error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} style={{ padding: '0 2rem 2rem' }}>
+      <p style={{ marginBottom: '1rem', fontSize: '0.85rem', color: 'var(--color-text-muted)', lineHeight: '1.4' }}>
+        Los Gastos Hormiga se marcan como completamente pagados al instante. No generarán cuotas en meses futuros, solo sirven para que tengas registro en lo que gastaste este mes.
+      </p>
+      <div className="form-group">
+        <label>¿Qué acabas de pagar al contado?</label>
+        <input type="text" className="form-control" required value={name} onChange={e => setName(e.target.value)} placeholder="Ej: Café con empanada" />
+      </div>
+
+      <div className="form-group">
+        <label>Valor Monetario</label>
+        <div style={{ position: 'relative' }}>
+          <DollarSign size={18} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.5)' }} />
+          <input type="number" className="form-control" style={{ paddingLeft: '2.5rem' }} required min="0" step="1" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Ej: 5000" />
+        </div>
+      </div>
+
+      <div className="form-group">
+        <label>Categoría</label>
+        <select className="form-control" value={category} onChange={e => setCategory(e.target.value)}>
+          {Object.entries(CATEGORIES).map(([key, cat]) => (
+            <option key={key} value={key}>{cat.label}</option>
+          ))}
+        </select>
+      </div>
+
+      <button type="submit" className="glass-button primary" style={{ width: '100%', justifyContent: 'center', marginTop: '1rem' }} disabled={loading}>
+        {loading ? 'Registrando...' : 'Registrar Gasto Hormiga'}
+      </button>
+    </form>
   );
 }
