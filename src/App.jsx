@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from './lib/supabase';
 import {
   CreditCard, Droplet, TrendingDown, Landmark, Heart, Briefcase,
-  Check, Plus, AlertCircle, X, Database, Search, Edit2, Trash2, History, ChevronDown, ChevronUp, DollarSign
+  Check, Plus, AlertCircle, X, Database, Search, Edit2, Trash2, History, ChevronDown, ChevronUp, DollarSign,
+  Tv, Shield, BookOpen, Home, Car, Coffee, Gamepad2, ShoppingBag
 } from 'lucide-react';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 import { format, startOfMonth, isBefore, parseISO } from 'date-fns';
@@ -15,7 +16,14 @@ const CATEGORIES = {
   deudas: { id: 'deudas', label: 'Deudas', icon: TrendingDown },
   creditos: { id: 'creditos', label: 'Créditos', icon: Landmark },
   manutenciones: { id: 'manutenciones', label: 'Manutenciones', icon: Heart },
-  compromisos: { id: 'compromisos', label: 'Compromisos', icon: Briefcase }
+  suscripciones: { id: 'suscripciones', label: 'Suscripciones (Netflix, Spotify)', icon: Tv },
+  arriendo: { id: 'arriendo', label: 'Arriendo / Hipoteca', icon: Home },
+  seguros: { id: 'seguros', label: 'Seguros', icon: Shield },
+  educacion: { id: 'educacion', label: 'Educación', icon: BookOpen },
+  transporte: { id: 'transporte', label: 'Transporte / Gasolina', icon: Car },
+  compras: { id: 'compras', label: 'Compras / Supermercado', icon: ShoppingBag },
+  entretenimiento: { id: 'entretenimiento', label: 'Entretenimiento / Salidas', icon: Gamepad2 },
+  compromisos: { id: 'compromisos', label: 'Otros Compromisos', icon: Briefcase }
 };
 
 export default function App() {
@@ -30,6 +38,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [editingExpense, setEditingExpense] = useState(null);
   const [expandedHistoryId, setExpandedHistoryId] = useState(null);
+  const [paymentConfirmation, setPaymentConfirmation] = useState(null);
 
   // Current month string 'yyyy-MM'
   const currentMonth = format(new Date(), 'yyyy-MM');
@@ -121,9 +130,21 @@ export default function App() {
   async function togglePayment(paymentId, currentStatus, expenseAmount) {
     if (!supabase) return;
 
-    const newStatus = !currentStatus;
+    if (!currentStatus) {
+      // Intentando pagar: abrimos modal de confirmación
+      setPaymentConfirmation({
+        paymentId,
+        amount: expenseAmount
+      });
+      return;
+    }
+
+    // Si ya estaba pagado y se quiere desmarcar, va directo
+    await executePaymentStatusUpdate(paymentId, false, null);
+  }
+
+  async function executePaymentStatusUpdate(paymentId, newStatus, amountPaidVal) {
     const completedAt = newStatus ? new Date().toISOString() : null;
-    const amountPaidVal = newStatus ? expenseAmount : null;
 
     // Optimistic update
     setPayments(prev => prev.map(p =>
@@ -143,6 +164,8 @@ export default function App() {
       console.error("Error updating payment", error);
       fetchData(); // Rollback
     }
+
+    setPaymentConfirmation(null);
   }
 
   async function deleteExpense(expenseId) {
@@ -320,7 +343,7 @@ export default function App() {
                 const IconComponent = CATEGORIES[expense.category]?.icon || Droplet;
 
                 // History for this expense explicitly
-                const expenseHistory = payments.filter(p => p.expense_id === expense.id && p.completed && p.id !== payment.id).slice(0, 5);
+                const expenseHistory = payments.filter(p => p.expense_id === expense.id && p.completed && p.id !== payment.id);
                 const isHistoryExpanded = expandedHistoryId === expense.id;
 
                 return (
@@ -414,6 +437,26 @@ export default function App() {
               initialData={editingExpense}
               onClose={handleCloseModal}
               onSuccess={fetchData}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* PAYMENT CONFIRMATION MODAL */}
+      <div className={`modal-overlay ${paymentConfirmation ? 'open' : ''}`}>
+        <div className="glass-panel modal-content">
+          <div className="modal-header">
+            <h3>Confirmar Pago</h3>
+            <button className="close-button" onClick={() => setPaymentConfirmation(null)}>
+              <X size={20} />
+            </button>
+          </div>
+
+          {paymentConfirmation && (
+            <PaymentConfirmForm
+              initialAmount={paymentConfirmation.amount}
+              onConfirm={(amount) => executePaymentStatusUpdate(paymentConfirmation.paymentId, true, amount)}
+              onCancel={() => setPaymentConfirmation(null)}
             />
           )}
         </div>
@@ -686,6 +729,57 @@ function ExpenseForm({ onClose, onSuccess, initialData }) {
       >
         {loading ? 'Guardando...' : (initialData ? 'Actualizar Gasto' : 'Guardar Gasto')}
       </button>
+    </form>
+  );
+}
+
+function PaymentConfirmForm({ initialAmount, onConfirm, onCancel }) {
+  const [loading, setLoading] = useState(false);
+  const [amount, setAmount] = useState(initialAmount || '');
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    setLoading(true);
+    onConfirm(parseFloat(amount));
+  }
+
+  return (
+    <form onSubmit={handleSubmit} style={{ padding: '0 2rem 2rem' }}>
+      <div className="form-group">
+        <label>¿Cuánto pagaste exactamente?</label>
+        <input
+          type="number"
+          className="form-control"
+          required
+          min="0"
+          step="1"
+          value={amount}
+          onChange={e => setAmount(e.target.value)}
+        />
+        <p style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
+          Por defecto se muestra el valor planeado del gasto. Puedes modificarlo si el monto que pagaste hoy fue diferente.
+        </p>
+      </div>
+
+      <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+        <button
+          type="button"
+          className="glass-button"
+          style={{ flex: 1, justifyContent: 'center' }}
+          onClick={onCancel}
+          disabled={loading}
+        >
+          Cancelar
+        </button>
+        <button
+          type="submit"
+          className="glass-button primary"
+          style={{ flex: 1, justifyContent: 'center' }}
+          disabled={loading}
+        >
+          {loading ? 'Guardando...' : 'Confirmar Pago'}
+        </button>
+      </div>
     </form>
   );
 }
