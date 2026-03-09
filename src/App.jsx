@@ -3,7 +3,7 @@ import { supabase } from './lib/supabase';
 import {
   CreditCard, Droplet, TrendingDown, Landmark, Heart, Briefcase,
   Check, Plus, AlertCircle, X, Database, Search, Edit2, Trash2, History, ChevronDown, ChevronUp, DollarSign,
-  Tv, Shield, BookOpen, Home, Car, Coffee, Gamepad2, ShoppingBag
+  Tv, Shield, BookOpen, Home, Car, Coffee, Gamepad2, ShoppingBag, ChevronLeft
 } from 'lucide-react';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 import { format, startOfMonth, isBefore, parseISO } from 'date-fns';
@@ -39,6 +39,7 @@ export default function App() {
   const [editingExpense, setEditingExpense] = useState(null);
   const [expandedHistoryId, setExpandedHistoryId] = useState(null);
   const [paymentConfirmation, setPaymentConfirmation] = useState(null);
+  const [viewingExpenseId, setViewingExpenseId] = useState(null);
 
   // Current month string 'yyyy-MM'
   const currentMonth = format(new Date(), 'yyyy-MM');
@@ -243,182 +244,174 @@ export default function App() {
 
   return (
     <div className="app-container">
-      <header className="glass-panel progress-header">
-        <div className="progress-info">
-          <h1>{displayMonth}</h1>
-          <p>
-            {percentage === 100 && totalActive > 0 && "¡Excelente! Has pagado todo."}
-            {percentage < 100 && `Has completado el ${percentage}% de tus compromisos activos.`}
-            {totalActive === 0 && "No tienes pagos configurados todavía."}
-          </p>
-
-          <div className="stats-row">
-            <div className="stat-item">
-              <span className="label">Total Mensual</span>
-              <span className="value">${totalAmountToPay.toLocaleString('es-CO')}</span>
-            </div>
-            <div className="stat-item">
-              <span className="label">Pendiente</span>
-              <span className="value" style={{ color: pendingAmount > 0 ? 'var(--color-text-main)' : 'var(--color-success)' }}>
-                ${pendingAmount.toLocaleString('es-CO')}
-              </span>
-            </div>
-          </div>
-
-          <div className="user-actions">
-            <span style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', background: 'rgba(255,255,255,0.05)', padding: '0.3rem 0.6rem', borderRadius: '4px', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {session?.user?.email}
-            </span>
-            <button
-              className="glass-button"
-              style={{ padding: '0.3rem 0.8rem', fontSize: '0.85rem', color: 'var(--color-text-muted)' }}
-              onClick={() => supabase.auth.signOut()}
-            >
-              Cerrar Sesión
-            </button>
-          </div>
-        </div>
-
-        <div className={`progress-circle ${percentage === 100 ? 'success' : ''}`}>
-          <svg viewBox="0 0 100 100">
-            <circle cx="50" cy="50" r="40" />
-            <circle
-              className="progress-value"
-              cx="50" cy="50" r="40"
-              style={{ strokeDasharray: 251.2, strokeDashoffset: 251.2 - (251.2 * percentage) / 100 }}
-            />
-          </svg>
-          <div className="progress-text">
-            {totalActive > 0 ? `${percentage}%` : '—'}
-          </div>
-        </div>
-      </header>
-
-      {loading && activePayments.length === 0 ? (
-        <div className="loader"></div>
+      {viewingExpenseId ? (
+        <ExpenseDetailScreen
+          expense={expenses.find(e => e.id === viewingExpenseId)}
+          allPayments={payments}
+          onBack={() => setViewingExpenseId(null)}
+          onTogglePayment={togglePayment}
+          currentMonth={currentMonth}
+        />
       ) : (
         <>
-          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-            <div className="search-input-wrapper">
-              <Search size={18} />
-              <input
-                type="text"
-                className="form-control"
-                placeholder="Buscar un pago..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-            <button className="glass-button primary" onClick={() => { setEditingExpense(null); setModalOpen(true); }}>
-              <Plus size={18} /> Nuevo Gasto
-            </button>
-          </div>
+          <header className="glass-panel progress-header">
+            <div className="progress-info">
+              <h1>{displayMonth}</h1>
+              <p>
+                {percentage === 100 && totalActive > 0 && "¡Excelente! Has pagado todo."}
+                {percentage < 100 && `Has completado el ${percentage}% de tus compromisos activos.`}
+                {totalActive === 0 && "No tienes pagos configurados todavía."}
+              </p>
 
-          <div className="payment-list">
-            {activePayments.length === 0 ? (
-              <div className="empty-state glass-panel">
-                <Heart size={48} />
-                <h3>No hay pagos aquí</h3>
-                <p>{searchQuery ? 'Intenta buscar con otro nombre.' : 'Agrega tu primer gasto mensual usando el botón de arriba.'}</p>
+              <div className="stats-row">
+                <div className="stat-item">
+                  <span className="label">Total Mensual</span>
+                  <span className="value">${totalAmountToPay.toLocaleString('es-CO')}</span>
+                </div>
+                <div className="stat-item">
+                  <span className="label">Pendiente</span>
+                  <span className="value" style={{ color: pendingAmount > 0 ? 'var(--color-text-main)' : 'var(--color-success)' }}>
+                    ${pendingAmount.toLocaleString('es-CO')}
+                  </span>
+                </div>
               </div>
-            ) : (
-              activePayments.sort((a, b) => {
-                const expA = expenses.find(e => e.id === a.expense_id);
-                const expB = expenses.find(e => e.id === b.expense_id);
-                const isOverdueA = a.month_year < currentMonth;
-                const isOverdueB = b.month_year < currentMonth;
 
-                if (isOverdueA && !isOverdueB) return -1;
-                if (!isOverdueA && isOverdueB) return 1;
+              <div className="user-actions">
+                <span style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', background: 'rgba(255,255,255,0.05)', padding: '0.3rem 0.6rem', borderRadius: '4px', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {session?.user?.email}
+                </span>
+                <button
+                  className="glass-button"
+                  style={{ padding: '0.3rem 0.8rem', fontSize: '0.85rem', color: 'var(--color-text-muted)' }}
+                  onClick={() => supabase.auth.signOut()}
+                >
+                  Cerrar Sesión
+                </button>
+              </div>
+            </div>
 
-                if (a.completed === b.completed) {
-                  return (expA?.due_day || 0) - (expB?.due_day || 0);
-                }
-                return a.completed ? 1 : -1;
-              }).map(payment => {
-                const expense = expenses.find(e => e.id === payment.expense_id);
-                if (!expense) return null;
+            <div className={`progress-circle ${percentage === 100 ? 'success' : ''}`}>
+              <svg viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="40" />
+                <circle
+                  className="progress-value"
+                  cx="50" cy="50" r="40"
+                  style={{ strokeDasharray: 251.2, strokeDashoffset: 251.2 - (251.2 * percentage) / 100 }}
+                />
+              </svg>
+              <div className="progress-text">
+                {totalActive > 0 ? `${percentage}%` : '—'}
+              </div>
+            </div>
+          </header>
 
-                const isOverdue = payment.month_year < currentMonth && !payment.completed;
-                const IconComponent = CATEGORIES[expense.category]?.icon || Droplet;
+          {loading && activePayments.length === 0 ? (
+            <div className="loader"></div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                <div className="search-input-wrapper">
+                  <Search size={18} />
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Buscar un pago..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+                <button className="glass-button primary" onClick={() => { setEditingExpense(null); setModalOpen(true); }}>
+                  <Plus size={18} /> Nuevo Gasto
+                </button>
+              </div>
 
-                // History for this expense explicitly
-                const expenseHistory = payments.filter(p => p.expense_id === expense.id && p.completed && p.id !== payment.id);
-                const isHistoryExpanded = expandedHistoryId === expense.id;
-
-                return (
-                  <div key={payment.id} className="payment-card-wrap">
-                    <div className={`glass-panel payment-card ${payment.completed ? 'completed' : ''} ${isOverdue ? 'overdue' : ''}`}>
-                      <div className="payment-details">
-                        <div className="category-icon">
-                          <IconComponent size={24} />
-                        </div>
-                        <div className="payment-info">
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <h3>{expense.name}</h3>
-                            <div className="card-top-actions">
-                              <button className="glass-icon-btn" title="Editar" onClick={() => openEditModal(expense)}>
-                                <Edit2 size={14} />
-                              </button>
-                              <button className="glass-icon-btn danger" title="Eliminar" onClick={() => deleteExpense(expense.id)}>
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          </div>
-                          <div className="payment-meta">
-                            <span>
-                              Día {expense.due_day}
-                              {isOverdue && <span className="overdue-badge">Vencido</span>}
-                            </span>
-                            <span>• {CATEGORIES[expense.category]?.label || 'General'}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="payment-actions">
-                        <div className="amount">${Number(expense.amount).toLocaleString('es-CO')}</div>
-                        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                          {expenseHistory.length > 0 && (
-                            <button
-                              className="glass-icon-btn"
-                              title="Ver Historial"
-                              onClick={() => setExpandedHistoryId(isHistoryExpanded ? null : expense.id)}
-                            >
-                              <History size={18} />
-                            </button>
-                          )}
-                          <button
-                            className={`check-button ${payment.completed ? 'checked' : ''}`}
-                            onClick={() => togglePayment(payment.id, payment.completed, expense.amount)}
-                          >
-                            <Check size={20} strokeWidth={3} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Panel de Historial */}
-                    {isHistoryExpanded && expenseHistory.length > 0 && (
-                      <div className="history-panel glass-panel">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem', color: 'var(--color-text-main)' }}>
-                          <History size={16} /> <strong>Historial de Pagos Anteriores</strong>
-                        </div>
-                        {expenseHistory.map(hist => (
-                          <div key={hist.id} className="history-item">
-                            <span>{format(parseISO(hist.month_year + '-01'), 'MMMM yyyy', { locale: es }).replace(/^\w/, c => c.toUpperCase())}</span>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                              <span>{format(parseISO(hist.completed_at), 'dd MMM yyyy', { locale: es })}</span>
-                              <strong>${Number(hist.amount_paid || expense.amount).toLocaleString('es-CO')}</strong>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+              <div className="payment-list">
+                {activePayments.length === 0 ? (
+                  <div className="empty-state glass-panel">
+                    <Heart size={48} />
+                    <h3>No hay pagos aquí</h3>
+                    <p>{searchQuery ? 'Intenta buscar con otro nombre.' : 'Agrega tu primer gasto mensual usando el botón de arriba.'}</p>
                   </div>
-                );
-              })
-            )}
-          </div>
+                ) : (
+                  activePayments.sort((a, b) => {
+                    const expA = expenses.find(e => e.id === a.expense_id);
+                    const expB = expenses.find(e => e.id === b.expense_id);
+                    const isOverdueA = a.month_year < currentMonth;
+                    const isOverdueB = b.month_year < currentMonth;
+
+                    if (isOverdueA && !isOverdueB) return -1;
+                    if (!isOverdueA && isOverdueB) return 1;
+
+                    if (a.completed === b.completed) {
+                      return (expA?.due_day || 0) - (expB?.due_day || 0);
+                    }
+                    return a.completed ? 1 : -1;
+                  }).map(payment => {
+                    const expense = expenses.find(e => e.id === payment.expense_id);
+                    if (!expense) return null;
+
+                    const isOverdue = payment.month_year < currentMonth && !payment.completed;
+                    const IconComponent = CATEGORIES[expense.category]?.icon || Droplet;
+
+                    // History for this expense explicitly
+                    const expenseHistory = payments.filter(p => p.expense_id === expense.id && p.completed && p.id !== payment.id);
+                    const isHistoryExpanded = expandedHistoryId === expense.id;
+
+                    return (
+                      <div key={payment.id} className="payment-card-wrap">
+                        <div className={`glass-panel payment-card ${payment.completed ? 'completed' : ''} ${isOverdue ? 'overdue' : ''}`}>
+                          <div className="payment-details">
+                            <div className="category-icon">
+                              <IconComponent size={24} />
+                            </div>
+                            <div className="payment-info">
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <h3>{expense.name}</h3>
+                                <div className="card-top-actions">
+                                  <button className="glass-icon-btn" title="Editar" onClick={() => openEditModal(expense)}>
+                                    <Edit2 size={14} />
+                                  </button>
+                                  <button className="glass-icon-btn danger" title="Eliminar" onClick={() => deleteExpense(expense.id)}>
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="payment-meta">
+                                <span>
+                                  Día {expense.due_day}
+                                  {isOverdue && <span className="overdue-badge">Vencido</span>}
+                                </span>
+                                <span>• {CATEGORIES[expense.category]?.label || 'General'}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="payment-actions">
+                            <div className="amount">${Number(expense.amount).toLocaleString('es-CO')}</div>
+                            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                              <button
+                                className="glass-icon-btn"
+                                title="Ver Detalle Completo"
+                                onClick={() => setViewingExpenseId(expense.id)}
+                              >
+                                <History size={18} />
+                              </button>
+                              <button
+                                className={`check-button ${payment.completed ? 'checked' : ''}`}
+                                onClick={() => togglePayment(payment.id, payment.completed, expense.amount)}
+                              >
+                                <Check size={20} strokeWidth={3} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </>
+          )}
         </>
       )}
 
@@ -781,5 +774,104 @@ function PaymentConfirmForm({ initialAmount, onConfirm, onCancel }) {
         </button>
       </div>
     </form>
+  );
+}
+
+function ExpenseDetailScreen({ expense, allPayments, onBack, onTogglePayment, currentMonth }) {
+  if (!expense) return <div className="loader"></div>;
+
+  const IconComponent = CATEGORIES[expense.category]?.icon || Droplet;
+  const expensePayments = allPayments.filter(p => p.expense_id === expense.id).sort((a, b) => {
+    if (a.month_year > b.month_year) return -1;
+    if (a.month_year < b.month_year) return 1;
+    return 0;
+  });
+
+  return (
+    <div style={{ animation: 'slideDown 0.3s ease' }}>
+      <button
+        className="glass-button"
+        onClick={onBack}
+        style={{ marginBottom: '1.5rem', padding: '0.5rem 1rem' }}
+      >
+        <ChevronLeft size={18} /> Volver al Inicio
+      </button>
+
+      <div className="glass-panel" style={{ padding: '2rem', marginBottom: '2rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', marginBottom: '2rem' }}>
+          <div className="category-icon" style={{ width: '64px', height: '64px', fontSize: '2rem' }}>
+            <IconComponent size={32} />
+          </div>
+          <div>
+            <h2 style={{ fontSize: '1.75rem', marginBottom: '0.25rem' }}>{expense.name}</h2>
+            <div className="payment-meta" style={{ fontSize: '1rem' }}>
+              <span>Día de corte: {expense.due_day}</span>
+              <span>• Categoría: {CATEGORIES[expense.category]?.label || 'General'}</span>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ background: 'rgba(0,0,0,0.2)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--color-glass-border)' }}>
+          <div style={{ color: 'var(--color-text-muted)', marginBottom: '0.5rem', textTransform: 'uppercase', fontSize: '0.8rem', letterSpacing: '0.05em' }}>Monto Previsto Mensual</div>
+          <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>${Number(expense.amount).toLocaleString('es-CO')}</div>
+        </div>
+      </div>
+
+      <h3 className="section-title">
+        <History size={20} /> Historial Completo de Pagos
+      </h3>
+
+      <div className="payment-list">
+        {expensePayments.map(payment => {
+          const isOverdue = payment.month_year < currentMonth && !payment.completed;
+          const isCurrentMonth = payment.month_year === currentMonth;
+
+          return (
+            <div key={payment.id} className={`glass-panel payment-card ${payment.completed ? 'completed' : ''} ${isOverdue ? 'overdue' : ''}`}>
+              <div className="payment-details">
+                <div className="payment-info">
+                  <h3 style={{ textTransform: 'capitalize' }}>
+                    {format(parseISO(payment.month_year + '-01'), 'MMMM yyyy', { locale: es })}
+                    {isCurrentMonth && <span className="badge" style={{ marginLeft: '1rem' }}>Mes Actual</span>}
+                  </h3>
+                  <div className="payment-meta">
+                    {payment.completed ? (
+                      <span style={{ color: 'var(--color-success)' }}>
+                        Pagado el {format(parseISO(payment.completed_at), 'dd MMM yyyy', { locale: es })}
+                      </span>
+                    ) : (
+                      <span>
+                        Vencimiento: Día {expense.due_day}
+                        {isOverdue && <span className="overdue-badge">Atrasado</span>}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="payment-actions">
+                <div className="amount">
+                  ${payment.completed ? Number(payment.amount_paid || expense.amount).toLocaleString('es-CO') : Number(expense.amount).toLocaleString('es-CO')}
+                </div>
+                <div>
+                  <button
+                    className={`check-button ${payment.completed ? 'checked' : ''}`}
+                    onClick={() => onTogglePayment(payment.id, payment.completed, expense.amount)}
+                  >
+                    <Check size={20} strokeWidth={3} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+        {expensePayments.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--color-text-muted)' }}>
+            No hay registros de pago para este compromiso.
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
