@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from './lib/supabase';
 import {
   CreditCard, Droplet, TrendingDown, Landmark, Heart, Briefcase,
-  Check, Plus, AlertCircle, X, Database
+  Check, Plus, AlertCircle, X, Database, Search, Edit2, Trash2, History, ChevronDown, ChevronUp, DollarSign
 } from 'lucide-react';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 import { format, startOfMonth, isBefore, parseISO } from 'date-fns';
@@ -25,6 +25,11 @@ export default function App() {
   const [modalOpen, setModalOpen] = useState(false);
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+
+  // New States
+  const [searchQuery, setSearchQuery] = useState('');
+  const [editingExpense, setEditingExpense] = useState(null);
+  const [expandedHistoryId, setExpandedHistoryId] = useState(null);
 
   // Current month string 'yyyy-MM'
   const currentMonth = format(new Date(), 'yyyy-MM');
@@ -67,16 +72,15 @@ export default function App() {
 
       if (expError) throw expError;
 
-      // 2. Fetch payments (instances for current month AND uncompleted old months)
+      // 2. Fetch payments (instances for current month AND uncompleted old months + HISTORY)
       const { data: paymentsData, error: payError } = await supabase
         .from('payments')
-        .select('*');
-      // A robust query logic could be done at SQL level, but for simplicity:
+        .select('*')
+        .order('month_year', { ascending: false });
 
       if (payError) throw payError;
 
       // 3. Sync Logic: Ensure all expenses have a payment instance for THIS month
-      // This is crucial. If 'Visa' exists, there MUST be a row in `payments` for '2026-03'.
       const currentMonthPayments = paymentsData.filter(p => p.month_year === currentMonth);
       const newPaymentsToInsert = [];
 
@@ -114,19 +118,24 @@ export default function App() {
     }
   }
 
-  async function togglePayment(paymentId, currentStatus) {
+  async function togglePayment(paymentId, currentStatus, expenseAmount) {
     if (!supabase) return;
+
+    const newStatus = !currentStatus;
+    const completedAt = newStatus ? new Date().toISOString() : null;
+    const amountPaidVal = newStatus ? expenseAmount : null;
 
     // Optimistic update
     setPayments(prev => prev.map(p =>
-      p.id === paymentId ? { ...p, completed: !currentStatus, completed_at: !currentStatus ? new Date().toISOString() : null } : p
+      p.id === paymentId ? { ...p, completed: newStatus, completed_at: completedAt, amount_paid: amountPaidVal } : p
     ));
 
     const { error } = await supabase
       .from('payments')
       .update({
-        completed: !currentStatus,
-        completed_at: !currentStatus ? new Date().toISOString() : null
+        completed: newStatus,
+        completed_at: completedAt,
+        amount_paid: amountPaidVal
       })
       .eq('id', paymentId);
 
@@ -134,6 +143,36 @@ export default function App() {
       console.error("Error updating payment", error);
       fetchData(); // Rollback
     }
+  }
+
+  async function deleteExpense(expenseId) {
+    if (!window.confirm("¿Estás seguro de que deseas eliminar este gasto de forma permanente (y todo su historial)?")) return;
+
+    // Optimistic UI update
+    setExpenses(prev => prev.filter(e => e.id !== expenseId));
+
+    const { error } = await supabase
+      .from('expenses')
+      .delete()
+      .eq('id', expenseId);
+
+    if (error) {
+      console.error("Error deleting expense", error);
+      alert("No se pudo eliminar el gasto.");
+      fetchData(); // Rollback
+    } else {
+      fetchData();
+    }
+  }
+
+  function openEditModal(expense) {
+    setEditingExpense(expense);
+    setModalOpen(true);
+  }
+
+  function handleCloseModal() {
+    setModalOpen(false);
+    setEditingExpense(null);
   }
 
   if (!supabase) {
@@ -149,20 +188,34 @@ export default function App() {
   }
 
   // --- Calculations ---
-  // All relevant payments: This month + older ones that are NOT completed
-  const activePayments = payments.filter(p => {
-    return p.month_year === currentMonth || (p.month_year < currentMonth && !p.completed);
-  });
+  // Active payments for main view: This month + older ones NOT completed
+  let activePayments = payments.filter(p => p.month_year === currentMonth || (p.month_year < currentMonth && !p.completed));
 
-  // Calculate completion percentage for the UI
-  // Wait, percentages and stats should probably only count THIS month's expected payments, 
-  // or all active payments. Let's do all active.
+  // Apply Search Filter
+  if (searchQuery.trim() !== '') {
+    activePayments = activePayments.filter(p => {
+      const exp = expenses.find(e => e.id === p.expense_id);
+      return exp?.name.toLowerCase().includes(searchQuery.toLowerCase());
+    });
+  }
+
+  // Calculate completion percentage & totals
   const totalActive = activePayments.length;
-  const completedActive = activePayments.filter(p => p.completed && p.month_year === currentMonth).length;
-  // Percentage based on current month only, plus past due? Let's just do all open vs completed.
   const percentage = totalActive > 0 ? Math.round((activePayments.filter(p => p.completed).length / totalActive) * 100) : 100;
 
-  // Format the month nicely (e.g., "Marzo 2026")
+  // Montos
+  const totalAmountToPay = activePayments.reduce((acc, p) => {
+    const e = expenses.find(exp => exp.id === p.expense_id);
+    return acc + (e ? Number(e.amount) : 0);
+  }, 0);
+
+  const totalAmountPaid = activePayments.filter(p => p.completed).reduce((acc, p) => {
+    const e = expenses.find(exp => exp.id === p.expense_id);
+    return acc + (e ? Number(e.amount) : 0);
+  }, 0);
+
+  const pendingAmount = totalAmountToPay - totalAmountPaid;
+
   const displayMonth = format(new Date(), 'MMMM yyyy', { locale: es }).replace(/^\w/, c => c.toUpperCase());
 
   return (
@@ -172,11 +225,25 @@ export default function App() {
           <h1>{displayMonth}</h1>
           <p>
             {percentage === 100 && totalActive > 0 && "¡Excelente! Has pagado todo."}
-            {percentage < 100 && `Has completado el ${percentage}% de tus pagos.`}
+            {percentage < 100 && `Has completado el ${percentage}% de tus compromisos activos.`}
             {totalActive === 0 && "No tienes pagos configurados todavía."}
           </p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '1.5rem' }}>
-            <span style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', background: 'rgba(255,255,255,0.05)', padding: '0.3rem 0.6rem', borderRadius: '4px' }}>
+
+          <div className="stats-row">
+            <div className="stat-item">
+              <span className="label">Total Mensual</span>
+              <span className="value">${totalAmountToPay.toLocaleString('es-CO')}</span>
+            </div>
+            <div className="stat-item">
+              <span className="label">Pendiente</span>
+              <span className="value" style={{ color: pendingAmount > 0 ? 'var(--color-text-main)' : 'var(--color-success)' }}>
+                ${pendingAmount.toLocaleString('es-CO')}
+              </span>
+            </div>
+          </div>
+
+          <div className="user-actions">
+            <span style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', background: 'rgba(255,255,255,0.05)', padding: '0.3rem 0.6rem', borderRadius: '4px', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {session?.user?.email}
             </span>
             <button
@@ -204,12 +271,22 @@ export default function App() {
         </div>
       </header>
 
-      {loading ? (
+      {loading && activePayments.length === 0 ? (
         <div className="loader"></div>
       ) : (
         <>
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button className="glass-button primary" onClick={() => setModalOpen(true)}>
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+            <div className="search-input-wrapper">
+              <Search size={18} />
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Buscar un pago..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <button className="glass-button primary" onClick={() => { setEditingExpense(null); setModalOpen(true); }}>
               <Plus size={18} /> Nuevo Gasto
             </button>
           </div>
@@ -218,12 +295,11 @@ export default function App() {
             {activePayments.length === 0 ? (
               <div className="empty-state glass-panel">
                 <Heart size={48} />
-                <h3>Todo tranquilo por aquí</h3>
-                <p>Agrega tu primer gasto mensual usando el botón de arriba.</p>
+                <h3>No hay pagos aquí</h3>
+                <p>{searchQuery ? 'Intenta buscar con otro nombre.' : 'Agrega tu primer gasto mensual usando el botón de arriba.'}</p>
               </div>
             ) : (
               activePayments.sort((a, b) => {
-                // Sorting logic: Overdue first, then by completed status, then by due day
                 const expA = expenses.find(e => e.id === a.expense_id);
                 const expB = expenses.find(e => e.id === b.expense_id);
                 const isOverdueA = a.month_year < currentMonth;
@@ -243,33 +319,78 @@ export default function App() {
                 const isOverdue = payment.month_year < currentMonth && !payment.completed;
                 const IconComponent = CATEGORIES[expense.category]?.icon || Droplet;
 
+                // History for this expense explicitly
+                const expenseHistory = payments.filter(p => p.expense_id === expense.id && p.completed && p.id !== payment.id).slice(0, 5);
+                const isHistoryExpanded = expandedHistoryId === expense.id;
+
                 return (
-                  <div key={payment.id} className={`glass-panel payment-card ${payment.completed ? 'completed' : ''} ${isOverdue ? 'overdue' : ''}`}>
-                    <div className="payment-details">
-                      <div className="category-icon">
-                        <IconComponent size={24} />
+                  <div key={payment.id} className="payment-card-wrap">
+                    <div className={`glass-panel payment-card ${payment.completed ? 'completed' : ''} ${isOverdue ? 'overdue' : ''}`}>
+                      <div className="payment-details">
+                        <div className="category-icon">
+                          <IconComponent size={24} />
+                        </div>
+                        <div className="payment-info">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <h3>{expense.name}</h3>
+                            <div className="card-top-actions">
+                              <button className="glass-icon-btn" title="Editar" onClick={() => openEditModal(expense)}>
+                                <Edit2 size={14} />
+                              </button>
+                              <button className="glass-icon-btn danger" title="Eliminar" onClick={() => deleteExpense(expense.id)}>
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="payment-meta">
+                            <span>
+                              Día {expense.due_day}
+                              {isOverdue && <span className="overdue-badge">Vencido</span>}
+                            </span>
+                            <span>• {CATEGORIES[expense.category]?.label || 'General'}</span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="payment-info">
-                        <h3>{expense.name}</h3>
-                        <div className="payment-meta">
-                          <span>
-                            Día {expense.due_day}
-                            {isOverdue && <span className="overdue-badge">Vencido</span>}
-                          </span>
-                          <span>• {CATEGORIES[expense.category]?.label || 'General'}</span>
+
+                      <div className="payment-actions">
+                        <div className="amount">${Number(expense.amount).toLocaleString('es-CO')}</div>
+                        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                          {expenseHistory.length > 0 && (
+                            <button
+                              className="glass-icon-btn"
+                              title="Ver Historial"
+                              onClick={() => setExpandedHistoryId(isHistoryExpanded ? null : expense.id)}
+                            >
+                              <History size={18} />
+                            </button>
+                          )}
+                          <button
+                            className={`check-button ${payment.completed ? 'checked' : ''}`}
+                            onClick={() => togglePayment(payment.id, payment.completed, expense.amount)}
+                          >
+                            <Check size={20} strokeWidth={3} />
+                          </button>
                         </div>
                       </div>
                     </div>
 
-                    <div className="payment-actions">
-                      <div className="amount">${expense.amount.toLocaleString('es-CO')}</div>
-                      <button
-                        className={`check-button ${payment.completed ? 'checked' : ''}`}
-                        onClick={() => togglePayment(payment.id, payment.completed)}
-                      >
-                        <Check size={20} strokeWidth={3} />
-                      </button>
-                    </div>
+                    {/* Panel de Historial */}
+                    {isHistoryExpanded && expenseHistory.length > 0 && (
+                      <div className="history-panel glass-panel">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem', color: 'var(--color-text-main)' }}>
+                          <History size={16} /> <strong>Historial de Pagos Anteriores</strong>
+                        </div>
+                        {expenseHistory.map(hist => (
+                          <div key={hist.id} className="history-item">
+                            <span>{format(parseISO(hist.month_year + '-01'), 'MMMM yyyy', { locale: es }).replace(/^\w/, c => c.toUpperCase())}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                              <span>{format(parseISO(hist.completed_at), 'dd MMM yyyy', { locale: es })}</span>
+                              <strong>${Number(hist.amount_paid || expense.amount).toLocaleString('es-CO')}</strong>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })
@@ -278,20 +399,23 @@ export default function App() {
         </>
       )}
 
-      {/* NEW EXPENSE MODAL */}
+      {/* NEW/EDIT EXPENSE MODAL */}
       <div className={`modal-overlay ${modalOpen ? 'open' : ''}`}>
         <div className="glass-panel modal-content">
           <div className="modal-header">
-            <h3>Agregar Nuevo Gasto</h3>
-            <button className="close-button" onClick={() => setModalOpen(false)}>
+            <h3>{editingExpense ? 'Modificar Gasto' : 'Agregar Nuevo Gasto'}</h3>
+            <button className="close-button" onClick={handleCloseModal}>
               <X size={20} />
             </button>
           </div>
 
-          <ExpenseForm
-            onClose={() => setModalOpen(false)}
-            onSuccess={fetchData}
-          />
+          {modalOpen && (
+            <ExpenseForm
+              initialData={editingExpense}
+              onClose={handleCloseModal}
+              onSuccess={fetchData}
+            />
+          )}
         </div>
       </div>
 
@@ -300,7 +424,6 @@ export default function App() {
 }
 
 // --- SUB COMPONENTS ---
-
 function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -335,7 +458,6 @@ function LoginScreen() {
     }
 
     if (result.error) {
-      // Manejar el caso especial de que las cuentas requieran confirmación de correo
       if (result.error.message.includes('Email confirmations')) {
         setMessage('Casi listo. Revisa tu correo y haz clic en el enlace de confirmación antes de iniciar sesión.');
       } else {
@@ -431,29 +553,18 @@ function SetupScreen() {
         <p>
           Para garantizar la persistencia de tus registros y que nada se pierda nunca, necesitamos configurar la conexión a la base de datos real.
         </p>
-        <div style={{ textAlign: 'left', background: 'rgba(0,0,0,0.3)', padding: '1.5rem', borderRadius: '8px', marginBottom: '1.5rem' }}>
-          <h4 style={{ marginBottom: '0.5rem' }}>Instrucciones:</h4>
-          <ol style={{ paddingLeft: '1.25rem', color: 'var(--color-text-muted)' }}>
-            <li style={{ marginBottom: '0.5rem' }}>Crea un proyecto en <a href="https://supabase.com" target="_blank" style={{ color: 'var(--color-primary)' }}>Supabase</a></li>
-            <li style={{ marginBottom: '0.5rem' }}>Abre la consola de SQL en tu proyecto y ejecuta el código que he dejado en tus registros para crear las tablas <code style={{ background: 'black', padding: '2px' }}>expenses</code> y <code style={{ background: 'black', padding: '2px' }}>payments</code>.</li>
-            <li>Crea un archivo <strong>.env.local</strong> en la raíz del proyecto con tus credenciales:</li>
-          </ol>
-          <pre style={{ background: '#0a0a0f', padding: '1rem', borderRadius: '4px', marginTop: '1rem', fontSize: '0.9rem', overflowX: 'auto' }}>
-            VITE_SUPABASE_URL=tu_url_de_supabase
-            VITE_SUPABASE_ANON_KEY=tu_anon_key</pre>
-        </div>
       </div>
     </div>
   );
 }
 
-function ExpenseForm({ onClose, onSuccess }) {
+function ExpenseForm({ onClose, onSuccess, initialData }) {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
-    category: 'tarjetas',
-    amount: '',
-    due_day: '15'
+    name: initialData ? initialData.name : '',
+    category: initialData ? initialData.category : 'tarjetas',
+    amount: initialData ? initialData.amount : '',
+    due_day: initialData ? initialData.due_day : '15'
   });
 
   async function handleSubmit(e) {
@@ -462,38 +573,51 @@ function ExpenseForm({ onClose, onSuccess }) {
     setLoading(true);
 
     try {
-      // 1. Insert Expense Template
-      const { data: expense, error } = await supabase
-        .from('expenses')
-        .insert([{
-          name: formData.name,
-          category: formData.category,
-          amount: parseFloat(formData.amount),
-          due_day: parseInt(formData.due_day)
-        }])
-        .select()
-        .single();
+      if (initialData) {
+        // Edit Existing Expense
+        const { error } = await supabase
+          .from('expenses')
+          .update({
+            name: formData.name,
+            category: formData.category,
+            amount: parseFloat(formData.amount),
+            due_day: parseInt(formData.due_day)
+          })
+          .eq('id', initialData.id);
 
-      if (error) throw error;
+        if (error) throw error;
+      } else {
+        // Insert New Template
+        const { data: expense, error } = await supabase
+          .from('expenses')
+          .insert([{
+            name: formData.name,
+            category: formData.category,
+            amount: parseFloat(formData.amount),
+            due_day: parseInt(formData.due_day)
+          }])
+          .select()
+          .single();
 
-      // 2. Insert First Payment Instance for CURRENT MONTH automatically
-      const currentMonth = format(new Date(), 'yyyy-MM');
-      const { error: paymentError } = await supabase
-        .from('payments')
-        .insert([{
-          expense_id: expense.id,
-          month_year: currentMonth,
-          completed: false
-        }]);
+        if (error) throw error;
 
-      if (paymentError) throw paymentError;
+        // Insert First Monthly Instance
+        const currentMonth = format(new Date(), 'yyyy-MM');
+        const { error: paymentError } = await supabase
+          .from('payments')
+          .insert([{
+            expense_id: expense.id,
+            month_year: currentMonth,
+            completed: false
+          }]);
+
+        if (paymentError) throw paymentError;
+      }
 
       onSuccess();
       onClose();
-      // reset form
-      setFormData({ name: '', category: 'tarjetas', amount: '', due_day: '15' });
     } catch (err) {
-      console.error("Insert error:", err);
+      console.error("Insert/Update error:", err);
       alert("Error guardando el gasto. Revisa la consola.");
     } finally {
       setLoading(false);
@@ -560,7 +684,7 @@ function ExpenseForm({ onClose, onSuccess }) {
         style={{ width: '100%', justifyContent: 'center', marginTop: '1rem' }}
         disabled={loading}
       >
-        {loading ? 'Guardando...' : 'Guardar Gasto'}
+        {loading ? 'Guardando...' : (initialData ? 'Actualizar Gasto' : 'Guardar Gasto')}
       </button>
     </form>
   );
