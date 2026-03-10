@@ -210,28 +210,25 @@ export default function App() {
     setAiLoading(true);
 
     try {
-      const { data: { session: curSession } } = await supabase.auth.getSession();
-      
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/magic-expense`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${curSession.access_token}`
-        },
-        body: JSON.stringify({ text: aiText, currentMonth: currentMonth })
+      // Usamos el cliente nativo de Supabase en lugar de Fetch
+      // Él se encarga de inyectar automáticamente tu JWT y tu Anon_Key
+      const { data, error } = await supabase.functions.invoke('magic-expense', {
+        body: { text: aiText, currentMonth: currentMonth }
       });
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Error procesando el gasto con IA.');
+      if (error) {
+        throw new Error(error.message || 'Error del servidor de Supabase.');
+      }
+      
+      if (data && data.error) {
+        throw new Error(data.error);
       }
 
       setAiText('');
       fetchData(); // Reload data
       
-      const isSpontaneous = result.data.is_spontaneous;
-      alert(`✨ ¡Guardado Mágicamente!\n${result.data.name} - $${Number(result.data.amount).toLocaleString('es-CO')}\n${isSpontaneous ? '(Pagado hoy)' : '(Agendado)'}`);
+      const isSpontaneous = data.data.is_spontaneous;
+      alert(`✨ ¡Guardado Mágicamente!\n${data.data.name} - $${Number(data.data.amount).toLocaleString('es-CO')}\n${isSpontaneous ? '(Pagado hoy)' : '(Agendado)'}`);
     } catch (error) {
       console.error(error);
       alert('Hubo un error interpretando tu gasto: ' + error.message);

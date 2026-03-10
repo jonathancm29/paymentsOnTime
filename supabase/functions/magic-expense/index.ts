@@ -13,23 +13,30 @@ serve(async (req) => {
     }
 
     try {
-        // 2. Extraer el JWT Token enviado desde React
+        const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+        const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+        
+        // 2. Extraer los Headers de Autorización
         const authHeader = req.headers.get('Authorization')
         if (!authHeader) {
             return new Response(JSON.stringify({ error: "No autorizado. Falta token." }), { status: 401, headers: corsHeaders })
         }
-
-        const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-        const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
         
-        // Inicializar cliente verificando al usuario final (¡No usamos Service Role aquí, así que el RLS funciona per-user!)
+        // Eliminar 'Bearer ' del inicio para obtener solo el JWT puro
+        const token = authHeader.replace('Bearer ', '').trim();
+        
+        // Inicializar cliente configurando la cabecera GLOBAL Authorization con el token real
+        // Esto es absolutamente necesario para que PostgreSQL te reconozca como el usuario
+        // y te permita pasar el escudo RLS.
         const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-            global: { headers: { Authorization: authHeader } }
+            global: { headers: { Authorization: `Bearer ${token}` } }
         })
 
+        // Verificamos explícitamente el token puro con Supabase Auth
         const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
 
         if (userError || !user) {
+            console.error("Auth error:", userError?.message);
             return new Response(JSON.stringify({ error: "Token inválido o expirado." }), { status: 401, headers: corsHeaders })
         }
 
@@ -76,7 +83,7 @@ Día actual de referencia (para cálculos de "hoy"): ${new Date().getDate()}`;
                     { role: "system", content: systemPrompt },
                     { role: "user", content: text }
                 ],
-                temperature: 0.1, // Baja temperatura = respuestas más predecibles
+                temperature: 0.1, // Baja temperatura
                 response_format: { type: "json_object" }
             })
         });
@@ -135,7 +142,7 @@ Día actual de referencia (para cálculos de "hoy"): ${new Date().getDate()}`;
             
         if (payError) throw payError;
 
-        // 7. Retornar éxito a la PWA de React
+        // 7. Retornar éxito
         return new Response(JSON.stringify({ 
             success: true, 
             data: expenseData, 
