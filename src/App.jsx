@@ -3,7 +3,7 @@ import { supabase } from './lib/supabase';
 import {
   CreditCard, Droplet, TrendingDown, Landmark, Heart, Briefcase,
   Check, Plus, AlertCircle, X, Database, Search, Edit2, Trash2, History, ChevronDown, ChevronUp, DollarSign,
-  Tv, Shield, BookOpen, Home, Car, Coffee, Gamepad2, ShoppingBag, ChevronLeft
+  Tv, Shield, BookOpen, Home, Car, Coffee, Gamepad2, ShoppingBag, ChevronLeft, Sparkles
 } from 'lucide-react';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 import { format, startOfMonth, isBefore, parseISO } from 'date-fns';
@@ -34,6 +34,10 @@ export default function App() {
   const [modalHormigaOpen, setModalHormigaOpen] = useState(false);
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+
+  // Magic AI State
+  const [aiText, setAiText] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
 
   // New States
   const [searchQuery, setSearchQuery] = useState('');
@@ -200,6 +204,42 @@ export default function App() {
     setEditingExpense(null);
   }
 
+  async function handleMagicSubmit(e) {
+    if (e) e.preventDefault();
+    if (!aiText.trim()) return;
+    setAiLoading(true);
+
+    try {
+      const { data: { session: curSession } } = await supabase.auth.getSession();
+      
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/magic-expense`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${curSession.access_token}`
+        },
+        body: JSON.stringify({ text: aiText, currentMonth: currentMonth })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Error procesando el gasto con IA.');
+      }
+
+      setAiText('');
+      fetchData(); // Reload data
+      
+      const isSpontaneous = result.data.is_spontaneous;
+      alert(`✨ ¡Guardado Mágicamente!\n${result.data.name} - $${Number(result.data.amount).toLocaleString('es-CO')}\n${isSpontaneous ? '(Pagado hoy)' : '(Agendado)'}`);
+    } catch (error) {
+      console.error(error);
+      alert('Hubo un error interpretando tu gasto: ' + error.message);
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
   if (!supabase) {
     return <SetupScreen />;
   }
@@ -340,6 +380,27 @@ export default function App() {
                     )
                   })}
                 </div>
+              </div>
+
+              {/* MAGIC AI BAR */}
+              <div className="glass-panel" style={{ marginTop: '1.5rem', display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.8rem 1rem' }}>
+                <div style={{ background: 'linear-gradient(135deg, #6366f1, #a855f7)', padding: '0.5rem', borderRadius: '50%', display: 'flex' }}>
+                  <Sparkles size={18} color="white" />
+                </div>
+                <form onSubmit={handleMagicSubmit} style={{ flex: 1, display: 'flex', gap: '0.5rem' }}>
+                  <input 
+                    type="text" 
+                    className="form-control" 
+                    style={{ flex: 1, background: 'rgba(0,0,0,0.2)', border: 'none', padding: '0.7rem 1rem', borderRadius: '6px' }}
+                    placeholder="Dile a tu asistente: Ayer gasté 15 mil en un almuerzo..."
+                    value={aiText}
+                    onChange={e => setAiText(e.target.value)}
+                    disabled={aiLoading}
+                  />
+                  <button type="submit" className="glass-button primary" disabled={aiLoading || !aiText.trim()}>
+                    {aiLoading ? 'Pensando...' : '✨ Enviar'}
+                  </button>
+                </form>
               </div>
 
               <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginTop: '1.5rem', flexWrap: 'wrap' }}>

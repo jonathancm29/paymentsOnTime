@@ -1,0 +1,155 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4"
+
+const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+serve(async (req) => {
+    // 1. Manejo de CORS obligatorio para navegadores
+    if (req.method === 'OPTIONS') {
+        return new Response('ok', { headers: corsHeaders })
+    }
+
+    try {
+        // 2. Extraer el JWT Token enviado desde React
+        const authHeader = req.headers.get('Authorization')
+        if (!authHeader) {
+            return new Response(JSON.stringify({ error: "No autorizado. Falta token." }), { status: 401, headers: corsHeaders })
+        }
+
+        const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+        const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+        
+        // Inicializar cliente verificando al usuario final (¡No usamos Service Role aquí, así que el RLS funciona per-user!)
+        const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            global: { headers: { Authorization: authHeader } }
+        })
+
+        const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
+
+        if (userError || !user) {
+            return new Response(JSON.stringify({ error: "Token inválido o expirado." }), { status: 401, headers: corsHeaders })
+        }
+
+        // 3. Obtener el texto del cliente
+        const { text, currentMonth } = await req.json()
+        if (!text) throw new Error("Debes enviar un texto a la inteligencia artificial");
+
+        // 4. Configurar el request hacia Azure OpenAI
+        const AZURE_API_KEY = Deno.env.get("AZURE_OPENAI_API_KEY");
+        const ENDPOINT = Deno.env.get("AZURE_OPENAI_ENDPOINT") || "https://jcardenasm-2116-resource.openai.azure.com/";
+        const DEPLOYMENT = Deno.env.get("AZURE_OPENAI_DEPLOYMENT_NAME") || "gpt-4.1";
+        const API_VERSION = Deno.env.get("AZURE_OPENAI_API_VERSION") || "2024-05-01-preview";
+
+        if (!AZURE_API_KEY) {
+             throw new Error("El administrador no ha configurado el AZURE_OPENAI_API_KEY en el servidor.");
+        }
+
+        const url = `${ENDPOINT}openai/deployments/${DEPLOYMENT}/chat/completions?api-version=${API_VERSION}`;
+        
+        // 5. El System Prompt
+        const systemPrompt = `Eres el asistente financiero de la app "Payments On Time" para Colombia.
+Tu objetivo es extraer los detalles de un nuevo gasto a partir de lo que el usuario dicte y devolver ÚNICAMENTE un objeto JSON válido, sin formato extra ni markdown.
+
+Propiedades del JSON esperado:
+- "name": (string) Nombre descriptivo (ej: "Café con pan", "Arriendo local", "Pasajes").
+- "amount": (number) Valor numérico entero exacto en pesos (ej: 20000, 150000). Si dice '20 mil', debes convertirlo a 20000.
+- "category": (string) Clasifica estrictamente en una de estas opciones: 'tarjetas', 'recibos', 'deudas', 'creditos', 'manutenciones', 'suscripciones', 'arriendo', 'seguros', 'educacion', 'transporte', 'compras', 'entretenimiento', 'compromisos'. (Si no sabes, usa 'compras' o 'entretenimiento').
+- "due_day": (number) Día del mes (1-31). Si menciona fechas como "el día 15", o "los 30", usa ese número. Si habla en pasado "ayer" o en presente "acabo de gastar", o no especifica, usa el día actual.
+- "is_spontaneous": (boolean) 'true' si es un gasto ocasional, efímero o un gasto de hoy (ej. "me gasté", "compré", "almuerzo", "fui al cine"). 'false' si es algo programado/fijo que se agenda a futuro (ej: "pagar la luz los 15", "la matrícula de la niña").
+
+Si es imposible deducir un valor monetario (amount), debes devolver: {"error": "Falta el valor"}
+
+Día actual de referencia (para cálculos de "hoy"): ${new Date().getDate()}`;
+
+        // Llamar a Azure OpenAI
+        const azureRes = await fetch(url, {
+            method: "POST",
+            headers: {
+                "api-key": AZURE_API_KEY,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: text }
+                ],
+                temperature: 0.1, // Baja temperatura = respuestas más predecibles
+                response_format: { type: "json_object" }
+            })
+        });
+
+        if (!azureRes.ok) {
+            const errRes = await azureRes.text();
+            throw new Error(`Error invocando Azure: ${errRes}`);
+        }
+
+        const azureData = await azureRes.json();
+        const resultContent = azureData.choices[0].message.content;
+        let expenseData;
+        try {
+            expenseData = JSON.parse(resultContent);
+        } catch(e) {
+            throw new Error("El modelo de IA no devolvió un JSON válido.");
+        }
+
+        if (expenseData.error) {
+            return new Response(JSON.stringify({ error: expenseData.error, message: "¿Podrías darme un valor para ese gasto?" }), { 
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 
+            });
+        }
+
+        // 6. ¡Lo guardamos en la base de datos!
+        const monthStr = currentMonth || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+        
+        // A) Crear el Gasto (Catálogo)
+        const { data: newExpense, error: expError } = await supabaseClient
+            .from('expenses')
+            .insert({
+                user_id: user.id, // Gracias al JWT, el backend sabe de forma segura que eres tú!
+                name: expenseData.name,
+                amount: expenseData.amount,
+                due_day: expenseData.due_day || new Date().getDate(),
+                category: expenseData.category || 'compromisos',
+                is_spontaneous: expenseData.is_spontaneous === true
+            })
+            .select('*')
+            .single();
+
+        if (expError) throw expError;
+
+        // B) Crear el Pago vinculado al mes (Registro)
+        const isCompleted = expenseData.is_spontaneous === true;
+
+        const { error: payError } = await supabaseClient
+            .from('payments')
+            .insert({
+                expense_id: newExpense.id,
+                month_year: monthStr,
+                completed: isCompleted,
+                completed_at: isCompleted ? new Date().toISOString() : null,
+                amount_paid: isCompleted ? expenseData.amount : null // Optimista
+            });
+            
+        if (payError) throw payError;
+
+        // 7. Retornar éxito a la PWA de React
+        return new Response(JSON.stringify({ 
+            success: true, 
+            data: expenseData, 
+            expense: newExpense 
+        }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200,
+        })
+
+    } catch (error) {
+        console.error("Function Error:", error.message);
+        return new Response(JSON.stringify({ error: error.message }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 400,
+        })
+    }
+})
