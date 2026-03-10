@@ -32,8 +32,8 @@ serve(async (req) => {
             global: { headers: { Authorization: `Bearer ${token}` } }
         })
 
-        // Verificamos explícitamente el token puro con Supabase Auth
-        const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
+        // Verificamos explícitamente el token puro con Supabase Auth pasándolo como argumento
+        const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token)
 
         if (userError || !user) {
             console.error("Auth error:", userError?.message);
