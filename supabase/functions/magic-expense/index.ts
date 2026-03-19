@@ -64,12 +64,12 @@ Propiedades del JSON esperado:
 - "name": (string) Nombre descriptivo (ej: "Café con pan", "Arriendo local", "Pasajes").
 - "amount": (number) Valor numérico entero exacto en pesos (ej: 20000, 150000). Si dice '20 mil', debes convertirlo a 20000.
 - "category": (string) Clasifica estrictamente en una de estas opciones: 'tarjetas', 'recibos', 'deudas', 'creditos', 'manutenciones', 'suscripciones', 'arriendo', 'seguros', 'educacion', 'transporte', 'compras', 'entretenimiento', 'compromisos'. (Si no sabes, usa 'compras' o 'entretenimiento').
-- "due_day": (number) Día del mes (1-31). Si menciona fechas como "el día 15", o "los 30", usa ese número. Si habla en pasado "ayer" o en presente "acabo de gastar", o no especifica, usa el día actual.
-- "is_spontaneous": (boolean) 'true' si es un gasto ocasional, efímero o un gasto de hoy (ej. "me gasté", "compré", "almuerzo", "fui al cine"). 'false' si es algo programado/fijo que se agenda a futuro (ej: "pagar la luz los 15", "la matrícula de la niña").
+- "due_day": (number) Día del mes (1-31). Si menciona fechas de vencimiento futuro (ej. "el día 15"), usa ese número. Si es un gasto que ya ocurrió en el pasado como "ayer", calcula el número del día correspondiente restando al día actual. Si no especifica o dice "hoy", usa el día actual.
+- "is_spontaneous": (boolean) 'true' si es un gasto ocasional, efímero o que ya se pagó (ej. "me gasté", "ayer compré", "almuerzo"). 'false' si es algo programado/fijo que se agenda a futuro (ej: "pagar la luz los 15").
 
 Si es imposible deducir un valor monetario (amount), debes devolver: {"error": "Falta el valor"}
 
-Día actual de referencia (para cálculos de "hoy"): ${new Date().getDate()}`;
+Día actual de referencia (para cálculos de "hoy" o "ayer"): Día ${new Date().getDate()}`;
 
         // Llamar a Azure OpenAI
         const azureRes = await fetch(url, {
@@ -129,6 +129,14 @@ Día actual de referencia (para cálculos de "hoy"): ${new Date().getDate()}`;
 
         // B) Crear el Pago vinculado al mes (Registro)
         const isCompleted = expenseData.is_spontaneous === true;
+        let completedDate = null;
+        if (isCompleted) {
+            const dateObj = new Date();
+            if (expenseData.due_day && typeof expenseData.due_day === 'number') {
+                dateObj.setDate(expenseData.due_day);
+            }
+            completedDate = dateObj.toISOString();
+        }
 
         const { error: payError } = await supabaseClient
             .from('payments')
@@ -136,7 +144,7 @@ Día actual de referencia (para cálculos de "hoy"): ${new Date().getDate()}`;
                 expense_id: newExpense.id,
                 month_year: monthStr,
                 completed: isCompleted,
-                completed_at: isCompleted ? new Date().toISOString() : null,
+                completed_at: completedDate,
                 amount_paid: isCompleted ? expenseData.amount : null // Optimista
             });
             

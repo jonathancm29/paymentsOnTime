@@ -228,7 +228,11 @@ export default function App() {
       fetchData(); // Reload data
       
       const isSpontaneous = data.data.is_spontaneous;
-      alert(`✨ ¡Guardado Mágicamente!\n${data.data.name} - $${Number(data.data.amount).toLocaleString('es-CO')}\n${isSpontaneous ? '(Pagado hoy)' : '(Agendado)'}`);
+      const dueDay = data.data.due_day || new Date().getDate();
+      const isToday = dueDay === new Date().getDate();
+      const pagadoText = isToday ? '(Pagado hoy)' : `(Pagado el día ${dueDay})`;
+
+      alert(`✨ ¡Guardado Mágicamente!\n${data.data.name} - $${Number(data.data.amount).toLocaleString('es-CO')}\n${isSpontaneous ? pagadoText : '(Agendado)'}`);
     } catch (error) {
       console.error(error);
       alert('Hubo un error interpretando tu gasto: ' + error.message);
