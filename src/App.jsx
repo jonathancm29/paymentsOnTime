@@ -271,12 +271,18 @@ export default function App() {
     return acc + (e ? Number(e.amount) : 0);
   }, 0);
 
-  const totalAmountPaid = activePayments.filter(p => p.completed).reduce((acc, p) => {
+  const totalCommitmentPaid = activePayments.filter(p => p.completed).reduce((acc, p) => {
     const e = expenses.find(exp => exp.id === p.expense_id);
     return acc + (e ? Number(e.amount) : 0);
   }, 0);
 
-  const pendingAmount = totalAmountToPay - totalAmountPaid;
+  const pendingAmount = totalAmountToPay - totalCommitmentPaid;
+
+  const totalActualPaid = activePayments.filter(p => p.completed).reduce((acc, p) => {
+    const e = expenses.find(exp => exp.id === p.expense_id);
+    const paidVal = p.amount_paid !== null && p.amount_paid !== undefined ? p.amount_paid : (e ? e.amount : 0);
+    return acc + Number(paidVal);
+  }, 0);
 
   const displayMonth = format(new Date(), 'MMMM yyyy', { locale: es }).replace(/^\w/, c => c.toUpperCase());
 
@@ -305,6 +311,12 @@ export default function App() {
                 <div className="stat-item">
                   <span className="label">Total Mensual</span>
                   <span className="value">${totalAmountToPay.toLocaleString('es-CO')}</span>
+                </div>
+                <div className="stat-item">
+                  <span className="label">Total Pagado</span>
+                  <span className="value" style={{ color: 'var(--color-primary)' }}>
+                    ${totalActualPaid.toLocaleString('es-CO')}
+                  </span>
                 </div>
                 <div className="stat-item">
                   <span className="label">Pendiente</span>
