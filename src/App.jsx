@@ -9,6 +9,11 @@ import HCaptcha from '@hcaptcha/react-hcaptcha';
 import { format, startOfMonth, isBefore, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 
+// --- MODO DE PRUEBA (Simulación de Tiempo) ---
+// Cambia la constante por null para volver a tiempo real, e.g. const TEST_DATE = null;
+const TEST_DATE = null //new Date('2026-04-01T12:00:00'); 
+export const getTodayDate = () => TEST_DATE || new Date();
+
 // Category Definitions
 const CATEGORIES = {
   tarjetas: { id: 'tarjetas', label: 'Tarjetas de crédito', icon: CreditCard },
@@ -47,7 +52,7 @@ export default function App() {
   const [viewingExpenseId, setViewingExpenseId] = useState(null);
 
   // Current month string 'yyyy-MM'
-  const currentMonth = format(new Date(), 'yyyy-MM');
+  const currentMonth = format(getTodayDate(), 'yyyy-MM');
 
   useEffect(() => {
     if (!supabase) {
@@ -150,7 +155,7 @@ export default function App() {
   }
 
   async function executePaymentStatusUpdate(paymentId, newStatus, amountPaidVal) {
-    const completedAt = newStatus ? new Date().toISOString() : null;
+    const completedAt = newStatus ? getTodayDate().toISOString() : null;
 
     // Optimistic update
     setPayments(prev => prev.map(p =>
@@ -219,17 +224,17 @@ export default function App() {
       if (error) {
         throw new Error(error.message || 'Error del servidor de Supabase.');
       }
-      
+
       if (data && data.error) {
         throw new Error(data.error);
       }
 
       setAiText('');
       fetchData(); // Reload data
-      
+
       const isSpontaneous = data.data.is_spontaneous;
-      const dueDay = data.data.due_day || new Date().getDate();
-      const isToday = dueDay === new Date().getDate();
+      const dueDay = data.data.due_day || getTodayDate().getDate();
+      const isToday = dueDay === getTodayDate().getDate();
       const pagadoText = isToday ? '(Pagado hoy)' : `(Pagado el día ${dueDay})`;
 
       alert(`✨ ¡Guardado Mágicamente!\n${data.data.name} - $${Number(data.data.amount).toLocaleString('es-CO')}\n${isSpontaneous ? pagadoText : '(Agendado)'}`);
@@ -288,7 +293,7 @@ export default function App() {
     return acc + Number(paidVal);
   }, 0);
 
-  const displayMonth = format(new Date(), 'MMMM yyyy', { locale: es }).replace(/^\w/, c => c.toUpperCase());
+  const displayMonth = format(getTodayDate(), 'MMMM yyyy', { locale: es }).replace(/^\w/, c => c.toUpperCase());
 
   return (
     <div className="app-container">
@@ -401,9 +406,9 @@ export default function App() {
                   <Sparkles size={18} color="white" />
                 </div>
                 <form onSubmit={handleMagicSubmit} style={{ flex: 1, display: 'flex', gap: '0.5rem' }}>
-                  <input 
-                    type="text" 
-                    className="form-control" 
+                  <input
+                    type="text"
+                    className="form-control"
                     style={{ flex: 1, background: 'rgba(0,0,0,0.2)', border: 'none', padding: '0.7rem 1rem', borderRadius: '6px' }}
                     placeholder="Dile a tu asistente: Ayer gasté 15 mil en un almuerzo..."
                     value={aiText}
@@ -460,7 +465,7 @@ export default function App() {
                     const expense = expenses.find(e => e.id === payment.expense_id);
                     if (!expense) return null;
 
-                    const currentDay = new Date().getDate();
+                    const currentDay = getTodayDate().getDate();
                     const isOverdue = !payment.completed && (payment.month_year < currentMonth || (payment.month_year === currentMonth && expense.due_day < currentDay));
                     const isWarning = isOverdue;
                     const IconComponent = CATEGORIES[expense.category]?.icon || Droplet;
@@ -772,7 +777,7 @@ function ExpenseForm({ onClose, onSuccess, initialData }) {
         if (error) throw error;
 
         // Insert First Monthly Instance
-        const currentMonth = format(new Date(), 'yyyy-MM');
+        const currentMonth = format(getTodayDate(), 'yyyy-MM');
         const { error: paymentError } = await supabase
           .from('payments')
           .insert([{
@@ -1028,7 +1033,7 @@ function ExpenseHormigaForm({ onClose, onSuccess, session, currentMonth }) {
           user_id: session.user.id,
           name: name,
           amount: parseFloat(amount),
-          due_day: new Date().getDate(),
+          due_day: getTodayDate().getDate(),
           category: category,
           is_spontaneous: true
         })
@@ -1044,7 +1049,7 @@ function ExpenseHormigaForm({ onClose, onSuccess, session, currentMonth }) {
           expense_id: newExpense.id,
           month_year: currentMonth,
           completed: true,
-          completed_at: new Date().toISOString(),
+          completed_at: getTodayDate().toISOString(),
           amount_paid: parseFloat(amount)
         });
 
