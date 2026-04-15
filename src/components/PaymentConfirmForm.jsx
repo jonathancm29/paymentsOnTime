@@ -1,13 +1,32 @@
 import { useState } from 'react';
+import { digitsOnly, formatCopFromDigits, parseCopDigitsToNumber } from '../utils/money';
 
 export default function PaymentConfirmForm({ initialAmount, onConfirm, onCancel }) {
   const [loading, setLoading] = useState(false);
-  const [amount, setAmount] = useState(initialAmount || '');
+  const [amountDigits, setAmountDigits] = useState(initialAmount !== null && initialAmount !== undefined ? digitsOnly(Math.round(Number(initialAmount))) : '');
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     setLoading(true);
-    onConfirm(parseFloat(amount));
+    try {
+      await onConfirm(parseCopDigitsToNumber(amountDigits));
+      alert('¡Pago confirmado con éxito!');
+      onCancel(); // This closes the modal
+    } catch (error) {
+      console.error(error);
+      alert('Hubo un error al confirmar el pago.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div style={{ padding: '2rem', textAlign: 'center' }}>
+        <div className="loader"></div>
+        <p style={{ marginTop: '1rem', color: 'var(--color-text-muted)' }}>Procesando tu pago...</p>
+      </div>
+    );
   }
 
   return (
@@ -15,13 +34,13 @@ export default function PaymentConfirmForm({ initialAmount, onConfirm, onCancel 
       <div className="form-group">
         <label>¿Cuánto pagaste exactamente?</label>
         <input
-          type="number"
+          type="text"
           className="form-control"
           required
-          min="0"
-          step="1"
-          value={amount}
-          onChange={e => setAmount(e.target.value)}
+          inputMode="numeric"
+          value={formatCopFromDigits(amountDigits)}
+          onChange={e => setAmountDigits(digitsOnly(e.target.value))}
+          placeholder="Ej: 120.000"
         />
         <p style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
           Por defecto se muestra el valor planeado del gasto. Puedes modificarlo si el monto que pagaste hoy fue diferente.

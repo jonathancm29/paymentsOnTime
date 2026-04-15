@@ -3,11 +3,12 @@ import { supabase } from '../lib/supabase';
 import { DollarSign } from 'lucide-react';
 import { CATEGORIES } from '../utils/categories';
 import { getTodayDate } from '../utils/dateHelpers';
+import { digitsOnly, formatCopFromDigits, parseCopDigitsToNumber } from '../utils/money';
 
 export default function ExpenseHormigaForm({ onClose, onSuccess, session, currentMonth }) {
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState('');
-  const [amount, setAmount] = useState('');
+  const [amountDigits, setAmountDigits] = useState('');
   const [category, setCategory] = useState('compras');
 
   async function handleSubmit(e) {
@@ -21,7 +22,7 @@ export default function ExpenseHormigaForm({ onClose, onSuccess, session, curren
         .insert({
           user_id: session.user.id,
           name: name,
-          amount: parseFloat(amount),
+          amount: parseCopDigitsToNumber(amountDigits),
           due_day: getTodayDate().getDate(),
           category: category,
           is_spontaneous: true
@@ -39,7 +40,7 @@ export default function ExpenseHormigaForm({ onClose, onSuccess, session, curren
           month_year: currentMonth,
           completed: true,
           completed_at: getTodayDate().toISOString(),
-          amount_paid: parseFloat(amount)
+          amount_paid: parseCopDigitsToNumber(amountDigits)
         });
 
       if (payError) throw payError;
@@ -67,7 +68,16 @@ export default function ExpenseHormigaForm({ onClose, onSuccess, session, curren
         <label>Valor Monetario</label>
         <div style={{ position: 'relative' }}>
           <DollarSign size={18} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.5)' }} />
-          <input type="number" className="form-control" style={{ paddingLeft: '2.5rem' }} required min="0" step="1" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Ej: 5000" />
+          <input
+            type="text"
+            className="form-control"
+            style={{ paddingLeft: '2.5rem' }}
+            required
+            inputMode="numeric"
+            value={formatCopFromDigits(amountDigits)}
+            onChange={e => setAmountDigits(digitsOnly(e.target.value))}
+            placeholder="Ej: 5.000"
+          />
         </div>
       </div>
 

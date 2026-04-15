@@ -34,7 +34,7 @@ describe('usePaymentsData Hook', () => {
     }));
 
     const mockSession = { user: { id: 'test-id' } };
-    const { result, waitForNextUpdate } = renderHook(() => usePaymentsData(mockSession));
+    const { result } = renderHook(() => usePaymentsData(mockSession));
     
     // Act is required for the async state updates inside useEffect
     await act(async () => {

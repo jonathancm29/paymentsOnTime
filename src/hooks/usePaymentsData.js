@@ -88,6 +88,7 @@ export function usePaymentsData(session) {
     if (error) {
       console.error("Error updating payment", error);
       fetchData();
+      throw error;
     }
   }
 

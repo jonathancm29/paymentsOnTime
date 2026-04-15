@@ -3,13 +3,14 @@ import { supabase } from '../lib/supabase';
 import { CATEGORIES } from '../utils/categories';
 import { getTodayDate } from '../utils/dateHelpers';
 import { format } from 'date-fns';
+import { digitsOnly, formatCopFromDigits, parseCopDigitsToNumber } from '../utils/money';
 
 export default function ExpenseForm({ onClose, onSuccess, initialData }) {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: initialData ? initialData.name : '',
     category: initialData ? initialData.category : 'tarjetas',
-    amount: initialData ? initialData.amount : '',
+    amount: initialData ? digitsOnly(Math.round(Number(initialData.amount || 0))) : '',
     due_day: initialData ? initialData.due_day : '15'
   });
 
@@ -26,7 +27,7 @@ export default function ExpenseForm({ onClose, onSuccess, initialData }) {
           .update({
             name: formData.name,
             category: formData.category,
-            amount: parseFloat(formData.amount),
+            amount: parseCopDigitsToNumber(formData.amount),
             due_day: parseInt(formData.due_day)
           })
           .eq('id', initialData.id);
@@ -39,7 +40,7 @@ export default function ExpenseForm({ onClose, onSuccess, initialData }) {
           .insert([{
             name: formData.name,
             category: formData.category,
-            amount: parseFloat(formData.amount),
+            amount: parseCopDigitsToNumber(formData.amount),
             due_day: parseInt(formData.due_day)
           }])
           .select()
@@ -100,13 +101,13 @@ export default function ExpenseForm({ onClose, onSuccess, initialData }) {
         <div className="form-group" style={{ flex: 1 }}>
           <label>Monto Estimado</label>
           <input
-            type="number"
+            type="text"
             className="form-control"
             required
-            min="0"
-            step="100"
-            value={formData.amount}
-            onChange={e => setFormData({ ...formData, amount: e.target.value })}
+            inputMode="numeric"
+            value={formatCopFromDigits(formData.amount)}
+            onChange={e => setFormData({ ...formData, amount: digitsOnly(e.target.value) })}
+            placeholder="Ej: 150.000"
           />
         </div>
 

@@ -32,7 +32,6 @@ export default function App() {
   // UI States
   const [searchQuery, setSearchQuery] = useState('');
   const [editingExpense, setEditingExpense] = useState(null);
-  const [expandedHistoryId, setExpandedHistoryId] = useState(null);
   const [paymentConfirmation, setPaymentConfirmation] = useState(null);
   const [viewingExpenseId, setViewingExpenseId] = useState(null);
 
@@ -74,7 +73,12 @@ export default function App() {
       return;
     }
 
-    await executePaymentStatusUpdate(paymentId, false, null);
+    try {
+      await executePaymentStatusUpdate(paymentId, false, null);
+    } catch (error) {
+      console.error(error);
+      alert('Error al actualizar el estado del pago: ' + error.message);
+    }
   }
 
   function openEditModal(expense) {
