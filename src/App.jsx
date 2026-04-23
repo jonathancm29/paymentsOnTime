@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './lib/supabase';
 import {
-  Heart, Plus, AlertCircle, X, Search, Edit2, Trash2, History, Check, Sparkles, Coffee, Droplet
+  Heart, Plus, AlertCircle, X, Search, Edit2, Trash2, History, Check, Sparkles, Coffee, Droplet, BarChart2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -18,6 +18,7 @@ import ExpenseForm from './components/ExpenseForm';
 import ExpenseHormigaForm from './components/ExpenseHormigaForm';
 import PaymentConfirmForm from './components/PaymentConfirmForm';
 import ExpenseDetailScreen from './components/ExpenseDetailScreen';
+import MonthlyHistoryScreen from './components/MonthlyHistoryScreen';
 
 export default function App() {
   const [modalOpen, setModalOpen] = useState(false);
@@ -34,6 +35,7 @@ export default function App() {
   const [editingExpense, setEditingExpense] = useState(null);
   const [paymentConfirmation, setPaymentConfirmation] = useState(null);
   const [viewingExpenseId, setViewingExpenseId] = useState(null);
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
     if (!supabase) {
@@ -173,7 +175,9 @@ export default function App() {
 
   return (
     <div className="app-container">
-      {viewingExpenseId ? (
+      {showHistory ? (
+        <MonthlyHistoryScreen session={session} onClose={() => setShowHistory(false)} />
+      ) : viewingExpenseId ? (
         <ExpenseDetailScreen
           expense={expenses.find(e => e.id === viewingExpenseId)}
           allPayments={payments}
@@ -215,6 +219,13 @@ export default function App() {
                 <span style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', background: 'rgba(255,255,255,0.05)', padding: '0.3rem 0.6rem', borderRadius: '4px', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {session?.user?.email}
                 </span>
+                <button
+                  className="glass-button"
+                  style={{ padding: '0.3rem 0.8rem', fontSize: '0.85rem' }}
+                  onClick={() => setShowHistory(true)}
+                >
+                  <BarChart2 size={15} /> Histórico
+                </button>
                 <button
                   className="glass-button"
                   style={{ padding: '0.3rem 0.8rem', fontSize: '0.85rem', color: 'var(--color-text-muted)' }}
