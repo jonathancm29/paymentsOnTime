@@ -71,7 +71,17 @@ export default function App() {
     if (!supabase) return;
 
     if (!currentStatus) {
-      setPaymentConfirmation({ paymentId, amount: expenseAmount });
+      const payment = activePayments.find(p => p.id === paymentId);
+      const expense = payment ? expenses.find(e => e.id === payment.expense_id) : null;
+      const category = expense ? CATEGORIES[expense.category] : null;
+      setPaymentConfirmation({
+        paymentId,
+        amount: expenseAmount,
+        paymentName: expense?.name,
+        categoryIcon: category?.icon,
+        categoryLabel: category?.label,
+        dueDay: expense?.due_day
+      });
       return;
     }
 
@@ -459,17 +469,18 @@ export default function App() {
 
       {/* PAYMENT CONFIRMATION MODAL */}
       <div className={`modal-overlay ${paymentConfirmation ? 'open' : ''}`}>
-        <div className="glass-panel modal-content">
-          <div className="modal-header">
-            <h3>Confirmar Pago</h3>
-            <button className="close-button" onClick={() => setPaymentConfirmation(null)}>
-              <X size={20} />
-            </button>
-          </div>
+        <div className="glass-panel modal-content modal-content--payment">
+          <button className="close-button modal-close--absolute" onClick={() => setPaymentConfirmation(null)}>
+            <X size={20} />
+          </button>
 
           {paymentConfirmation && (
             <PaymentConfirmForm
-              initialAmount={paymentConfirmation.amount}
+              paymentName={paymentConfirmation.paymentName}
+              categoryIcon={paymentConfirmation.categoryIcon}
+              categoryLabel={paymentConfirmation.categoryLabel}
+              dueDay={paymentConfirmation.dueDay}
+              expectedAmount={paymentConfirmation.amount}
               onConfirm={(amount) => executePaymentStatusUpdate(paymentConfirmation.paymentId, true, amount)}
               onCancel={() => setPaymentConfirmation(null)}
             />
