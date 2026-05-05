@@ -429,12 +429,9 @@ export default function App() {
       {/* NEW/EDIT EXPENSE MODAL */}
       <div className={`modal-overlay ${modalOpen ? 'open' : ''}`}>
         <div className="glass-panel modal-content">
-          <div className="modal-header">
-            <h3>{editingExpense ? 'Modificar Gasto' : 'Agregar Nuevo Gasto'}</h3>
-            <button className="close-button" onClick={handleCloseModal}>
-              <X size={20} />
-            </button>
-          </div>
+          <button className="close-button modal-close--absolute" onClick={handleCloseModal}>
+            <X size={20} />
+          </button>
 
           {modalOpen && (
             <ExpenseForm
@@ -449,12 +446,9 @@ export default function App() {
       {/* GASTO HORMIGA MODAL */}
       <div className={`modal-overlay ${modalHormigaOpen ? 'open' : ''}`}>
         <div className="glass-panel modal-content">
-          <div className="modal-header">
-            <h3>Registrar Gasto Hormiga</h3>
-            <button className="close-button" onClick={() => setModalHormigaOpen(false)}>
-              <X size={20} />
-            </button>
-          </div>
+          <button className="close-button modal-close--absolute" onClick={() => setModalHormigaOpen(false)}>
+            <X size={20} />
+          </button>
 
           {modalHormigaOpen && (
             <ExpenseHormigaForm

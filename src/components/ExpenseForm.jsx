@@ -4,6 +4,7 @@ import { CATEGORIES } from '../utils/categories';
 import { getTodayDate } from '../utils/dateHelpers';
 import { format } from 'date-fns';
 import { digitsOnly, formatCopFromDigits, parseCopDigitsToNumber } from '../utils/money';
+import { Edit2, Plus } from 'lucide-react';
 
 export default function ExpenseForm({ onClose, onSuccess, initialData }) {
   const [loading, setLoading] = useState(false);
@@ -72,67 +73,101 @@ export default function ExpenseForm({ onClose, onSuccess, initialData }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ padding: '0 2rem 2rem' }}>
-      <div className="form-group">
-        <label>Nombre del Compromiso (Ej. Tarjeta de Crédito Nu)</label>
-        <input
-          type="text"
-          className="form-control"
-          required
-          value={formData.name}
-          onChange={e => setFormData({ ...formData, name: e.target.value })}
-        />
+    <form onSubmit={handleSubmit} className="expense-form">
+      <div className="expense-form__header">
+        <div className="expense-form__icon">
+          {initialData ? <Edit2 size={20} /> : <Plus size={20} />}
+        </div>
+        <div>
+          <h2 className="expense-form__title">
+            {initialData ? 'Editar Gasto' : 'Nuevo Gasto'}
+          </h2>
+          <p className="expense-form__subtitle">
+            {initialData ? 'Actualiza los datos del compromiso' : 'Agrega un compromiso mensual a tu lista'}
+          </p>
+        </div>
       </div>
 
-      <div className="form-group">
-        <label>Categoría</label>
-        <select
-          className="form-control"
-          value={formData.category}
-          onChange={e => setFormData({ ...formData, category: e.target.value })}
-        >
-          {Object.entries(CATEGORIES).map(([key, cat]) => (
-            <option key={key} value={key}>{cat.label}</option>
-          ))}
-        </select>
-      </div>
-
-      <div style={{ display: 'flex', gap: '1rem' }}>
-        <div className="form-group" style={{ flex: 1 }}>
-          <label>Monto Estimado</label>
+      <div className="expense-form__fields">
+        <div className="form-group">
+          <label>Nombre</label>
           <input
             type="text"
             className="form-control"
             required
-            inputMode="numeric"
-            value={formatCopFromDigits(formData.amount)}
-            onChange={e => setFormData({ ...formData, amount: digitsOnly(e.target.value) })}
-            placeholder="Ej: 150.000"
+            value={formData.name}
+            onChange={e => setFormData({ ...formData, name: e.target.value })}
+            placeholder="Ej: Tarjeta de Crédito Nu"
+            autoFocus
           />
         </div>
 
-        <div className="form-group" style={{ width: '120px' }}>
-          <label>Día (1-31)</label>
-          <input
-            type="number"
+        <div className="expense-form__row">
+          <div className="form-group">
+            <label>Monto estimado</label>
+            <input
+              type="text"
+              className="form-control"
+              required
+              inputMode="numeric"
+              value={formatCopFromDigits(formData.amount)}
+              onChange={e => setFormData({ ...formData, amount: digitsOnly(e.target.value) })}
+              placeholder="$ 0"
+            />
+          </div>
+
+          <div className="form-group expense-form__day">
+            <label>Día de pago</label>
+            <input
+              type="number"
+              className="form-control"
+              required
+              min="1"
+              max="31"
+              value={formData.due_day}
+              onChange={e => setFormData({ ...formData, due_day: e.target.value })}
+              placeholder="15"
+            />
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label>Categoría</label>
+          <select
             className="form-control"
-            required
-            min="1"
-            max="31"
-            value={formData.due_day}
-            onChange={e => setFormData({ ...formData, due_day: e.target.value })}
-          />
+            value={formData.category}
+            onChange={e => setFormData({ ...formData, category: e.target.value })}
+          >
+            {Object.entries(CATEGORIES).map(([key, cat]) => (
+              <option key={key} value={key}>{cat.label}</option>
+            ))}
+          </select>
         </div>
       </div>
 
-      <button
-        type="submit"
-        className="glass-button primary"
-        style={{ width: '100%', justifyContent: 'center', marginTop: '1rem' }}
-        disabled={loading}
-      >
-        {loading ? 'Guardando...' : (initialData ? 'Actualizar Gasto' : 'Guardar Gasto')}
-      </button>
+      <div className="expense-form__actions">
+        <button
+          type="button"
+          className="glass-button"
+          onClick={onClose}
+        >
+          Cancelar
+        </button>
+        <button
+          type="submit"
+          className="glass-button primary"
+          disabled={loading}
+        >
+          {loading ? (
+            <>
+              <span className="expense-form__spinner" />
+              Guardando...
+            </>
+          ) : (
+            initialData ? 'Actualizar' : 'Guardar'
+          )}
+        </button>
+      </div>
     </form>
   );
 }
