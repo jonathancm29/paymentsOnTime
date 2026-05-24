@@ -56,9 +56,9 @@ npm install
 <summary><b>Haz clic aquí para ver el Script SQL (Schemas + Segurida RLS)</b></summary>
 
 ```sql
--- Borramos las tablas anteriores si existían
-DROP TABLE IF EXISTS public.payments;
-DROP TABLE IF EXISTS public.expenses;
+-- (OPCIONAL) Descomenta si deseas reiniciar las tablas nuevas de proyectos
+-- DROP TABLE IF EXISTS public.project_transactions;
+-- DROP TABLE IF EXISTS public.project_accounts;
 
 -- 1. Tabla del Catálogo de Gastos ligada al Usuario
 CREATE TABLE public.expenses (
@@ -85,11 +85,42 @@ CREATE TABLE public.payments (
     UNIQUE (expense_id, month_year)
 );
 
--- 3. Configurar Row Level Security (RLS) para proteger los datos de cada usuario
+-- 3. Tabla de Cuentas de Proyectos
+CREATE TABLE public.project_accounts (
+    id           UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id      UUID NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
+    name         TEXT NOT NULL,
+    description  TEXT,
+    budget       NUMERIC,          -- NULL = sin presupuesto
+    archived     BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- 4. Tabla de Transacciones de Proyectos
+CREATE TABLE public.project_transactions (
+    id               UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    project_id       UUID NOT NULL REFERENCES public.project_accounts(id) ON DELETE CASCADE,
+    user_id          UUID NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
+    description      TEXT NOT NULL,
+    amount           NUMERIC NOT NULL,   -- positivo = ingreso/aporte, negativo = gasto
+    category         TEXT NOT NULL DEFAULT 'general',
+    transaction_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- 5. Índices para rendimiento
+CREATE INDEX IF NOT EXISTS idx_project_tx_project        ON public.project_transactions(project_id);
+CREATE INDEX IF NOT EXISTS idx_project_tx_user_date      ON public.project_transactions(user_id, transaction_date DESC);
+CREATE INDEX IF NOT EXISTS idx_project_accounts_user     ON public.project_accounts(user_id);
+
+-- 6. Configurar Row Level Security (RLS)
 ALTER TABLE public.expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.project_accounts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.project_transactions ENABLE ROW LEVEL SECURITY;
 
--- Políticas de Seguridad: Solo el dueño puede Ver/Insertar/Actualizar/Borrar sus datos
+-- 7. Políticas de Seguridad (Solo el dueño puede gestionar)
 CREATE POLICY "Users can manage their own expenses" 
 ON public.expenses FOR ALL 
 USING (auth.uid() = user_id)
@@ -99,6 +130,25 @@ CREATE POLICY "Users can manage their own payments"
 ON public.payments FOR ALL 
 USING (auth.uid() = user_id)
 WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "owners can manage project_accounts"
+ON public.project_accounts FOR ALL
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "owners can manage project_transactions"
+ON public.project_transactions FOR ALL
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);
+
+-- 8. Trigger para mantener updated_at en project_accounts
+CREATE OR REPLACE FUNCTION public.touch_updated_at()
+RETURNS TRIGGER AS $$ BEGIN NEW.updated_at = now(); RETURN NEW; END; $$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_project_accounts_updated_at ON public.project_accounts;
+CREATE TRIGGER trg_project_accounts_updated_at
+  BEFORE UPDATE ON public.project_accounts
+  FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
 ```
 </details>
 
