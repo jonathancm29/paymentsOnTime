@@ -1,4 +1,4 @@
-import { TrendingUp, Calendar, Star, ArrowUp, ArrowDown, Minus } from 'lucide-react';
+import { TrendingUp, Calendar, Star, ArrowUp, ArrowDown, Minus, Coffee } from 'lucide-react';
 import { CATEGORIES } from '../utils/categories';
 
 function formatCOP(amount) {
@@ -72,7 +72,7 @@ export default function KPICards({ report, loading }) {
 
   if (!report) return null;
 
-  const { total, dailyAverage, topCategory, variationPercent } = report;
+  const { total, spontaneousTotal, dailyAverage, topCategory, variationPercent } = report;
 
   const categoryLabel = topCategory
     ? (CATEGORIES[topCategory]?.label || topCategory)
@@ -106,6 +106,12 @@ export default function KPICards({ report, loading }) {
           value={formatCOP(total)}
         />
         <KPICard
+          icon={Coffee}
+          iconColor="#f97316"
+          label="Gastos hormiga"
+          value={formatCOP(spontaneousTotal)}
+        />
+        <KPICard
           icon={Calendar}
           iconColor="#f59e0b"
           label="Promedio diario"
@@ -124,7 +130,7 @@ export default function KPICards({ report, loading }) {
           value={variationDisplay}
           valueColor={variationColor}
         />
-      </div>
-    </>
-  );
-}
+       </div>
+     </>
+   );
+ }

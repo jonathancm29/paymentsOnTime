@@ -51,6 +51,7 @@ function toTransaction(p) {
     completed_at: p.completed_at ?? null,
     month_year: p.month_year,
     due_day: p.expenses?.due_day ?? null,
+    is_spontaneous: p.expenses?.is_spontaneous ?? false,
   };
 }
 
@@ -79,6 +80,11 @@ function computeTotal(transactions) {
  */
 function buildReport(transactions, prevTotal, year, month) {
   const total = computeTotal(transactions);
+  const spontaneousTotal = transactions.reduce((sum, t) => {
+    if (!t.completed || !t.is_spontaneous) return sum;
+    const value = t.amount_paid != null ? t.amount_paid : t.amount;
+    return sum + value;
+  }, 0);
   const days = daysInMonth(year, month);
   const dailyAverage = days > 0 ? total / days : 0;
 
@@ -123,6 +129,7 @@ function buildReport(transactions, prevTotal, year, month) {
 
   return {
     total,
+    spontaneousTotal,
     dailyAverage,
     topCategory,
     variationPercent,
@@ -139,6 +146,7 @@ function buildReport(transactions, prevTotal, year, month) {
 function emptyReport() {
   return {
     total: 0,
+    spontaneousTotal: 0,
     dailyAverage: 0,
     topCategory: '',
     variationPercent: null,
