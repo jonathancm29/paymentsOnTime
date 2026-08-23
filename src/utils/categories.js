@@ -1,6 +1,7 @@
 import {
   CreditCard, Droplet, TrendingDown, Landmark, Heart, Briefcase,
-  Tv, Shield, BookOpen, Home, Car, Gamepad2, ShoppingBag
+  Tv, Shield, BookOpen, Home, Car, Gamepad2, ShoppingBag,
+  Percent, Gem, ShieldCheck, Plane
 } from 'lucide-react';
 
 export const CATEGORIES = {
@@ -16,5 +17,9 @@ export const CATEGORIES = {
   transporte: { id: 'transporte', label: 'Transporte / Gasolina', icon: Car },
   compras: { id: 'compras', label: 'Compras / Supermercado', icon: ShoppingBag },
   entretenimiento: { id: 'entretenimiento', label: 'Entretenimiento / Salidas', icon: Gamepad2 },
+  impuestos: { id: 'impuestos', label: 'Impuestos (Renta, Predial)', icon: Percent },
+  membresias: { id: 'membresias', label: 'Membresías / Clubes', icon: Gem },
+  soat_tecnomecanica: { id: 'soat_tecnomecanica', label: 'SOAT / Tecnomecánica', icon: ShieldCheck },
+  viajes: { id: 'viajes', label: 'Viajes / Vacaciones', icon: Plane },
   compromisos: { id: 'compromisos', label: 'Otros Compromisos', icon: Briefcase }
 };

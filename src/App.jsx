@@ -24,6 +24,11 @@ import MonthlyHistoryScreen from './components/MonthlyHistoryScreen';
 import ProjectsDashboard from './components/ProjectsDashboard';
 import ProjectDetailScreen from './components/ProjectDetailScreen';
 
+const MONTH_NAMES = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+];
+
 export default function App() {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalHormigaOpen, setModalHormigaOpen] = useState(false);
@@ -416,7 +421,11 @@ export default function App() {
                                   </div>
                                   <div className="payment-meta">
                                     <span>
-                                      Día {expense.due_day}
+                                      {expense.recurrence === 'yearly' ? (
+                                        `Anual • ${MONTH_NAMES[expense.due_month - 1]} ${expense.due_day}`
+                                      ) : (
+                                        `Día ${expense.due_day}`
+                                      )}
                                       {isWarning && <span className="overdue-badge"><AlertCircle size={10} style={{ display: 'inline', marginRight: '2px' }} /> Vencido</span>}
                                       {expense.is_spontaneous && <span className="badge" style={{ background: 'rgba(255,255,255,0.1)', color: 'white' }}>Hormiga</span>}
                                     </span>

@@ -3,6 +3,11 @@ import { CATEGORIES } from '../utils/categories';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 
+const MONTH_NAMES = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+];
+
 export default function ExpenseDetailScreen({ expense, allPayments, onBack, onTogglePayment, currentMonth }) {
   if (!expense) return <div className="loader"></div>;
 
@@ -31,14 +36,22 @@ export default function ExpenseDetailScreen({ expense, allPayments, onBack, onTo
           <div>
             <h2 style={{ fontSize: '1.75rem', marginBottom: '0.25rem' }}>{expense.name}</h2>
             <div className="payment-meta" style={{ fontSize: '1rem' }}>
-              <span>Día de corte: {expense.due_day}</span>
+              <span>
+                {expense.recurrence === 'yearly' ? (
+                  `Vence el: ${expense.due_day} de ${MONTH_NAMES[expense.due_month - 1]}`
+                ) : (
+                  `Día de corte: ${expense.due_day}`
+                )}
+              </span>
               <span>• Categoría: {CATEGORIES[expense.category]?.label || 'General'}</span>
             </div>
           </div>
         </div>
 
         <div style={{ background: 'rgba(0,0,0,0.2)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--color-glass-border)' }}>
-          <div style={{ color: 'var(--color-text-muted)', marginBottom: '0.5rem', textTransform: 'uppercase', fontSize: '0.8rem', letterSpacing: '0.05em' }}>Monto Previsto Mensual</div>
+          <div style={{ color: 'var(--color-text-muted)', marginBottom: '0.5rem', textTransform: 'uppercase', fontSize: '0.8rem', letterSpacing: '0.05em' }}>
+            {expense.recurrence === 'yearly' ? 'Monto Previsto Anual' : 'Monto Previsto Mensual'}
+          </div>
           <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>${Number(expense.amount).toLocaleString('es-CO')}</div>
         </div>
       </div>
@@ -67,7 +80,11 @@ export default function ExpenseDetailScreen({ expense, allPayments, onBack, onTo
                       </span>
                     ) : (
                       <span>
-                        Vencimiento: Día {expense.due_day}
+                        Vencimiento: {expense.recurrence === 'yearly' ? (
+                          `${expense.due_day} de ${MONTH_NAMES[expense.due_month - 1]}`
+                        ) : (
+                          `Día ${expense.due_day}`
+                        )}
                         {isOverdue && <span className="overdue-badge">Atrasado</span>}
                       </span>
                     )}

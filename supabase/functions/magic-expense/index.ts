@@ -66,6 +66,8 @@ Propiedades del JSON esperado:
 - "category": (string) Clasifica estrictamente en una de estas opciones: 'tarjetas', 'recibos', 'deudas', 'creditos', 'manutenciones', 'suscripciones', 'arriendo', 'seguros', 'educacion', 'transporte', 'compras', 'entretenimiento', 'compromisos'. (Si no sabes, usa 'compras' o 'entretenimiento').
 - "due_day": (number) Día del mes (1-31). Si menciona fechas de vencimiento futuro (ej. "el día 15"), usa ese número. Si es un gasto que ya ocurrió en el pasado como "ayer", calcula el número del día correspondiente restando al día actual. Si no especifica o dice "hoy", usa el día actual.
 - "is_spontaneous": (boolean) 'true' si es un gasto ocasional, efímero o que ya se pagó (ej. "me gasté", "ayer compré", "almuerzo"). 'false' si es algo programado/fijo que se agenda a futuro (ej: "pagar la luz los 15").
+- "recurrence": (string) 'monthly' o 'yearly' (por defecto 'monthly'). Usa 'yearly' si indica recurrencia anual (ej: "poliza anual", "seguro de auto al año", "impuestos cada año").
+- "due_month": (number) número de mes del 1 al 12 en el cual vence el gasto anual (nulo si recurrence es 'monthly'). Si el usuario dice un mes como "en Noviembre", usa 11. Si no lo especifica pero es recurrence 'yearly', usa el mes actual.
 
 Si es imposible deducir un valor monetario (amount), debes devolver: {"error": "Falta el valor"}
 
@@ -120,35 +122,51 @@ Día actual de referencia (para cálculos de "hoy" o "ayer"): Día ${new Date().
                 amount: expenseData.amount,
                 due_day: expenseData.due_day || new Date().getDate(),
                 category: expenseData.category || 'compromisos',
-                is_spontaneous: expenseData.is_spontaneous === true
+                is_spontaneous: expenseData.is_spontaneous === true,
+                recurrence: expenseData.recurrence || 'monthly',
+                due_month: expenseData.recurrence === 'yearly' ? (expenseData.due_month || (new Date().getMonth() + 1)) : null
             })
             .select('*')
             .single();
 
         if (expError) throw expError;
 
-        // B) Crear el Pago vinculado al mes (Registro)
+        // B) Crear el Pago vinculado al mes (Registro) si corresponde
         const isCompleted = expenseData.is_spontaneous === true;
-        let completedDate = null;
-        if (isCompleted) {
-            const dateObj = new Date();
-            if (expenseData.due_day && typeof expenseData.due_day === 'number') {
-                dateObj.setDate(expenseData.due_day);
+        const isYearly = expenseData.recurrence === 'yearly';
+        const dueMonthVal = expenseData.recurrence === 'yearly' ? (expenseData.due_month || (new Date().getMonth() + 1)) : null;
+
+        let shouldCreatePayment = true;
+        if (isYearly && !isCompleted) {
+            // Check if current month matches due month
+            const currentMonthNum = new Date().getMonth() + 1; // 1-12
+            if (dueMonthVal !== currentMonthNum) {
+                shouldCreatePayment = false;
             }
-            completedDate = dateObj.toISOString();
         }
 
-        const { error: payError } = await supabaseClient
-            .from('payments')
-            .insert({
-                expense_id: newExpense.id,
-                month_year: monthStr,
-                completed: isCompleted,
-                completed_at: completedDate,
-                amount_paid: isCompleted ? expenseData.amount : null // Optimista
-            });
-            
-        if (payError) throw payError;
+        if (shouldCreatePayment) {
+            let completedDate = null;
+            if (isCompleted) {
+                const dateObj = new Date();
+                if (expenseData.due_day && typeof expenseData.due_day === 'number') {
+                    dateObj.setDate(expenseData.due_day);
+                }
+                completedDate = dateObj.toISOString();
+            }
+
+            const { error: payError } = await supabaseClient
+                .from('payments')
+                .insert({
+                    expense_id: newExpense.id,
+                    month_year: monthStr,
+                    completed: isCompleted,
+                    completed_at: completedDate,
+                    amount_paid: isCompleted ? expenseData.amount : null // Optimista
+                });
+                
+            if (payError) throw payError;
+        }
 
         // 7. Retornar éxito
         return new Response(JSON.stringify({ 

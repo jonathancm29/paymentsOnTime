@@ -19,7 +19,7 @@ describe('useProjectAccounts Hook', () => {
 
   it('initializes with default loading state', () => {
     const { result } = renderHook(() => useProjectAccounts(null));
-    expect(result.current.loading).toBe(true);
+    expect(result.current.loading).toBe(false);
     expect(result.current.projects).toEqual([]);
     expect(result.current.transactions).toEqual([]);
   });

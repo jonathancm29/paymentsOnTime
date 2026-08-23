@@ -52,6 +52,8 @@ function toTransaction(p) {
     month_year: p.month_year,
     due_day: p.expenses?.due_day ?? null,
     is_spontaneous: p.expenses?.is_spontaneous ?? false,
+    recurrence: p.expenses?.recurrence ?? 'monthly',
+    due_month: p.expenses?.due_month ?? null,
   };
 }
 
@@ -168,7 +170,7 @@ function emptyReport() {
 async function fetchMonthTotal(userId, monthYear, signal) {
   const { data, error } = await supabase
     .from('payments')
-    .select('*, expenses(name, category, amount, due_day)')
+    .select('*, expenses(name, category, amount, due_day, recurrence, due_month)')
     .eq('user_id', userId)
     .eq('month_year', monthYear)
     .abortSignal(signal);
@@ -216,7 +218,7 @@ export function useMonthlyHistoryData(session) {
       // Fetch current month payments (joined with expenses)
       const { data, error: fetchError } = await supabase
         .from('payments')
-        .select('*, expenses(name, category, amount, due_day)')
+        .select('*, expenses(name, category, amount, due_day, recurrence, due_month)')
         .eq('user_id', userId)
         .eq('month_year', monthYear)
         .abortSignal(signal);

@@ -28,10 +28,15 @@ export function usePaymentsData(session) {
 
       const currentMonthPayments = paymentsData.filter(p => p.month_year === currentMonth);
       const newPaymentsToInsert = [];
+      const currentMonthNumber = parseInt(format(getTodayDate(), 'M')); // 1 to 12
 
       for (const expense of expensesData) {
         const hasPaymentThisMonth = currentMonthPayments.some(p => p.expense_id === expense.id);
         if (!hasPaymentThisMonth && !expense.is_spontaneous) {
+          // Si es un gasto anual, validar si corresponde al mes actual
+          if (expense.recurrence === 'yearly' && expense.due_month !== currentMonthNumber) {
+            continue;
+          }
           newPaymentsToInsert.push({
             expense_id: expense.id,
             month_year: currentMonth,

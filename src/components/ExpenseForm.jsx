@@ -12,7 +12,9 @@ export default function ExpenseForm({ onClose, onSuccess, initialData }) {
     name: initialData ? initialData.name : '',
     category: initialData ? initialData.category : 'tarjetas',
     amount: initialData ? digitsOnly(Math.round(Number(initialData.amount || 0))) : '',
-    due_day: initialData ? initialData.due_day : '15'
+    due_day: initialData ? initialData.due_day : '15',
+    recurrence: initialData && initialData.recurrence ? initialData.recurrence : 'monthly',
+    due_month: initialData && initialData.due_month ? String(initialData.due_month) : '1'
   });
 
   async function handleSubmit(e) {
@@ -29,7 +31,9 @@ export default function ExpenseForm({ onClose, onSuccess, initialData }) {
             name: formData.name,
             category: formData.category,
             amount: parseCopDigitsToNumber(formData.amount),
-            due_day: parseInt(formData.due_day)
+            due_day: parseInt(formData.due_day),
+            recurrence: formData.recurrence,
+            due_month: formData.recurrence === 'yearly' ? parseInt(formData.due_month) : null
           })
           .eq('id', initialData.id);
 
@@ -42,24 +46,32 @@ export default function ExpenseForm({ onClose, onSuccess, initialData }) {
             name: formData.name,
             category: formData.category,
             amount: parseCopDigitsToNumber(formData.amount),
-            due_day: parseInt(formData.due_day)
+            due_day: parseInt(formData.due_day),
+            recurrence: formData.recurrence,
+            due_month: formData.recurrence === 'yearly' ? parseInt(formData.due_month) : null
           }])
           .select()
           .single();
 
         if (error) throw error;
 
-        // Insert First Monthly Instance
+        // Insert First Monthly Instance if applicable
         const currentMonth = format(getTodayDate(), 'yyyy-MM');
-        const { error: paymentError } = await supabase
-          .from('payments')
-          .insert([{
-            expense_id: expense.id,
-            month_year: currentMonth,
-            completed: false
-          }]);
+        const currentMonthNumber = parseInt(format(getTodayDate(), 'M')); // 1 to 12
+        const isYearly = formData.recurrence === 'yearly';
+        const dueMonthNum = parseInt(formData.due_month);
 
-        if (paymentError) throw paymentError;
+        if (!isYearly || (isYearly && dueMonthNum === currentMonthNumber)) {
+          const { error: paymentError } = await supabase
+            .from('payments')
+            .insert([{
+              expense_id: expense.id,
+              month_year: currentMonth,
+              completed: false
+            }]);
+
+          if (paymentError) throw paymentError;
+        }
       }
 
       onSuccess();
@@ -129,6 +141,48 @@ export default function ExpenseForm({ onClose, onSuccess, initialData }) {
               placeholder="15"
             />
           </div>
+        </div>
+
+        <div className="expense-form__row">
+          <div className="form-group">
+            <label>Recurrencia</label>
+            <select
+              className="form-control"
+              value={formData.recurrence}
+              onChange={e => setFormData({ 
+                ...formData, 
+                recurrence: e.target.value,
+                due_month: e.target.value === 'yearly' ? (formData.due_month || '1') : null
+              })}
+            >
+              <option value="monthly">Mensual</option>
+              <option value="yearly">Anual</option>
+            </select>
+          </div>
+
+          {formData.recurrence === 'yearly' && (
+            <div className="form-group" style={{ width: '130px', flexShrink: 0 }}>
+              <label>Mes de pago</label>
+              <select
+                className="form-control"
+                value={formData.due_month || '1'}
+                onChange={e => setFormData({ ...formData, due_month: e.target.value })}
+              >
+                <option value="1">Enero</option>
+                <option value="2">Febrero</option>
+                <option value="3">Marzo</option>
+                <option value="4">Abril</option>
+                <option value="5">Mayo</option>
+                <option value="6">Junio</option>
+                <option value="7">Julio</option>
+                <option value="8">Agosto</option>
+                <option value="9">Septiembre</option>
+                <option value="10">Octubre</option>
+                <option value="11">Noviembre</option>
+                <option value="12">Diciembre</option>
+              </select>
+            </div>
+          )}
         </div>
 
         <div className="form-group">
