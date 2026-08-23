@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from './lib/supabase';
 import {
   Heart, Plus, AlertCircle, X, Search, Edit2, Trash2, History, Check, Sparkles, Coffee, Droplet, BarChart2,
-  Briefcase, Calendar
+  Briefcase, Calendar, LayoutList
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -23,6 +23,7 @@ import ExpenseDetailScreen from './components/ExpenseDetailScreen';
 import MonthlyHistoryScreen from './components/MonthlyHistoryScreen';
 import ProjectsDashboard from './components/ProjectsDashboard';
 import ProjectDetailScreen from './components/ProjectDetailScreen';
+import ExpensesManagerScreen from './components/ExpensesManagerScreen';
 
 const MONTH_NAMES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -225,6 +226,12 @@ export default function App() {
               onClick={() => setActiveTab('projects')}
             >
               <Briefcase size={16} /> Cuentas por Proyectos
+            </button>
+            <button
+              className={`nav-tab ${activeTab === 'gastos' ? 'active' : ''}`}
+              onClick={() => { setActiveTab('gastos'); setActiveProjectId(null); }}
+            >
+              <LayoutList size={16} /> Mis Gastos
             </button>
           </div>
 
@@ -461,6 +468,13 @@ export default function App() {
                 </>
               )}
             </>
+          ) : activeTab === 'gastos' ? (
+            <ExpensesManagerScreen
+              expenses={expenses}
+              onDeleteExpense={deleteExpense}
+              onViewDetail={(id) => setViewingExpenseId(id)}
+              onRefresh={fetchData}
+            />
           ) : activeProjectId ? (
             <ProjectDetailScreen
               projectId={activeProjectId}
